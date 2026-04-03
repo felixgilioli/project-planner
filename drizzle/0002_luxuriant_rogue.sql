@@ -1,0 +1,1 @@
+ALTER TABLE "activities" ADD COLUMN "start_date" timestamp;

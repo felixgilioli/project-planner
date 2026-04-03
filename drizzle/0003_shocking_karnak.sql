@@ -1,0 +1,1 @@
+ALTER TABLE "activities" ADD COLUMN "depends_on_id" uuid;
