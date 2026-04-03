@@ -22,12 +22,6 @@ export type CalendarResult = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isWeekend(dateStr: string): boolean {
-  const d = new Date(dateStr + 'T12:00:00')
-  const day = d.getDay()
-  return day === 0 || day === 6
-}
-
 function generateYearDays(year: number): CalendarDayData[] {
   const days: CalendarDayData[] = []
   const start = new Date(year, 0, 1)
@@ -35,12 +29,10 @@ function generateYearDays(year: number): CalendarDayData[] {
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10)
-    const dow = d.getDay()
-    const weekend = dow === 0 || dow === 6
     days.push({
       date: dateStr,
-      type: weekend ? 'non_working' : 'working',
-      reason: weekend ? 'Fim de semana' : null,
+      type: 'working',
+      reason: null,
     })
   }
 
@@ -157,9 +149,6 @@ export async function saveCalendar(
 
   // Build rows with correct type/reason
   const rows = allDays.map((d) => {
-    if (isWeekend(d.date)) {
-      return { calendarId: calendar.id, date: d.date, type: 'non_working' as const, reason: 'Fim de semana' }
-    }
     if (nonWorkingMap.has(d.date)) {
       return { calendarId: calendar.id, date: d.date, type: 'non_working' as const, reason: nonWorkingMap.get(d.date) ?? null }
     }

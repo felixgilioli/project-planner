@@ -76,25 +76,6 @@ export function CalendarMonth({ year, month, days, today, onDayChange }: Calenda
 
           const dayData = dayMap.get(dateStr)
           const isToday = dateStr === today
-          // Derive day-of-week from grid column position — avoids creating Date objects per cell
-          const isWeekend = idx % 7 === 0 || idx % 7 === 6
-
-          if (isWeekend) {
-            return (
-              <div
-                key={dateStr}
-                className={cn(
-                  'flex items-center justify-center rounded text-[11px] h-7 w-full',
-                  'bg-muted/40 text-muted-foreground/50',
-                  isToday && 'ring-1 ring-inset ring-primary',
-                )}
-              >
-                <span className="line-through">
-                  {parseInt(dateStr.slice(8))}
-                </span>
-              </div>
-            )
-          }
 
           return (
             <DayCell

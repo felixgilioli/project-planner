@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useTransition, useMemo, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, CalendarDays, X, PartyPopper } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { PageHeader } from '@/components/shared/page-header'
 import { CalendarMonth } from '@/components/calendar/calendar-month'
-import { getCalendar, saveCalendar, getBrazilianHolidays } from '@/app/actions/calendar'
+import { getCalendar, saveCalendar } from '@/app/actions/calendar'
 import type { CalendarDayData } from '@/app/actions/calendar'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -27,17 +27,12 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isLoadingYear, startLoadingYear] = useTransition()
-  const [isLoadingHolidays, startLoadingHolidays] = useTransition()
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   // Derived stats — memoized to avoid re-filtering 365 items on every render
-  const weekendDays = useMemo(
-    () => days.filter((d) => d.type === 'non_working' && (d.reason === 'Fim de semana' || !d.reason)).length,
-    [days],
-  )
   const holidays = useMemo(
-    () => days.filter((d) => d.type === 'non_working' && d.reason && d.reason !== 'Fim de semana').length,
+    () => days.filter((d) => d.type === 'non_working').length,
     [days],
   )
   const workingDays = useMemo(() => days.filter((d) => d.type === 'working').length, [days])
@@ -73,32 +68,11 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
     setIsDirty(true)
   }
 
-  function handleLoadHolidays() {
-    startLoadingHolidays(async () => {
-      try {
-        const holidays = await getBrazilianHolidays(year)
-        setDays((prev) => {
-          const holidayMap = new Map(holidays.map((h) => [h.date, h.reason]))
-          return prev.map((d) => {
-            if (holidayMap.has(d.date)) {
-              return { ...d, type: 'non_working' as const, reason: holidayMap.get(d.date)! }
-            }
-            return d
-          })
-        })
-        setIsDirty(true)
-        toast.success(`${holidays.length} feriados carregados.`)
-      } catch {
-        toast.error('Erro ao carregar feriados.')
-      }
-    })
-  }
-
   function handleSave() {
     startSaving(async () => {
       try {
         const nonWorkingDays = days
-          .filter((d) => d.type === 'non_working' && d.reason !== 'Fim de semana')
+          .filter((d) => d.type === 'non_working')
           .map((d) => ({ date: d.date, reason: d.reason }))
 
         await saveCalendar(projectId, year, nonWorkingDays)
@@ -124,20 +98,6 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
                 Alterações pendentes
               </Badge>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLoadHolidays}
-              disabled={isLoadingHolidays || isSaving || isLoading}
-              className="gap-1.5"
-            >
-              {isLoadingHolidays ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <PartyPopper className="h-4 w-4" />
-              )}
-              Feriados brasileiros
-            </Button>
             <Button
               size="sm"
               onClick={handleSave}
@@ -178,18 +138,14 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Card className="p-4 text-center">
             <p className="text-2xl font-bold text-primary">{workingDays}</p>
             <p className="text-xs text-muted-foreground mt-1">Dias úteis</p>
           </Card>
           <Card className="p-4 text-center">
             <p className="text-2xl font-bold text-destructive">{holidays}</p>
-            <p className="text-xs text-muted-foreground mt-1">Feriados</p>
-          </Card>
-          <Card className="p-4 text-center">
-            <p className="text-2xl font-bold text-muted-foreground">{weekendDays}</p>
-            <p className="text-xs text-muted-foreground mt-1">Fins de semana</p>
+            <p className="text-xs text-muted-foreground mt-1">Dias não úteis</p>
           </Card>
         </div>
 
