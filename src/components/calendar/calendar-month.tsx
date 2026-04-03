@@ -104,7 +104,8 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
   const [open, setOpen] = useState(false)
 
   const isNonWorking = dayData.type === 'non_working'
-  const isFreeze = dayData.eventType === 'freeze'
+  const hasHoliday = dayData.events.some((e) => e.type === 'holiday')
+  const hasFreeze = dayData.events.some((e) => e.type === 'freeze')
   const hasMemberEvents = dayData.events.some((e) => e.memberId !== null)
   const dayNum = parseInt(dateStr.slice(8))
 
@@ -116,15 +117,17 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
           className={cn(
             'flex flex-col items-center justify-center rounded text-[11px] h-7 w-full cursor-pointer transition-colors',
             'hover:bg-accent hover:text-accent-foreground',
-            // non-working (holiday)
-            isNonWorking && !isFreeze && 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400',
-            // freeze — working day, purple ring
-            isFreeze && 'ring-1 ring-inset ring-purple-400 text-foreground',
+            // holiday (green) — highest priority for non-working
+            hasHoliday && 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400',
+            // weekend / non-working without explicit holiday (gray)
+            isNonWorking && !hasHoliday && 'bg-muted text-muted-foreground',
             // normal working day
-            !isNonWorking && !isFreeze && 'bg-background text-foreground',
+            !isNonWorking && !hasHoliday && 'bg-background text-foreground',
+            // freeze ring — combines with any background
+            hasFreeze && 'ring-1 ring-inset ring-sky-300',
             isToday && 'ring-1 ring-inset ring-primary font-bold',
-            // today + freeze: primary ring takes precedence
-            isToday && isFreeze && 'ring-primary',
+            // today ring takes precedence over freeze ring color
+            isToday && hasFreeze && 'ring-primary',
           )}
         >
           <span>{dayNum}</span>
