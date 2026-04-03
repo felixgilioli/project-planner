@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { loginUser } from './actions'
+import { loginUser } from '@/app/actions/auth'
 
 export default function LoginPage() {
   const [state, action, isPending] = useActionState(loginUser, null)

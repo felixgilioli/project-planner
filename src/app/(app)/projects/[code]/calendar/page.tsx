@@ -4,11 +4,11 @@ import { getCalendar } from '@/app/actions/calendar'
 import { CalendarClient } from './calendar-client'
 
 interface CalendarPageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ code: string }>
 }
 
 export default async function CalendarPage({ params }: CalendarPageProps) {
-  const { id: code } = await params
+  const { code } = await params
 
   const project = await getProjectByCode(code)
   if (!project) redirect('/projects')

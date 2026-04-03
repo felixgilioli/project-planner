@@ -74,3 +74,16 @@ Projects are identified in URLs by their `code` field (not UUID), e.g., `/projec
 Two separate clients for different contexts:
 - `src/lib/supabase/client.ts` — Browser (client components)
 - `src/lib/supabase/server.ts` — Server (Server Actions, middleware, server components)
+
+### Input Validation
+
+Zod schemas in `src/lib/validations/` are the single source of truth for business rules.
+Each schema is used both server-side (in Server Actions) and client-side (via React Hook Form + zodResolver).
+
+### Subdirectory CLAUDE.md Files
+
+For deeper context on specific areas, see:
+- `src/lib/db/CLAUDE.md` — Schema conventions, indexes, migration approach
+- `src/app/actions/CLAUDE.md` — Server Action pattern, auth, tenant isolation
+- `src/components/CLAUDE.md` — Component organization, shadcn/ui usage
+- `src/lib/validations/CLAUDE.md` — Validation schema usage pattern

@@ -4,11 +4,11 @@ import { getMembers } from '@/app/actions/members'
 import { MembersClient } from './members-client'
 
 interface MembersPageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ code: string }>
 }
 
 export default async function MembersPage({ params }: MembersPageProps) {
-  const { id: code } = await params
+  const { code } = await params
 
   const project = await getProjectByCode(code)
   if (!project) redirect('/projects')

@@ -7,11 +7,11 @@ import { ProjectSidebar } from '@/components/projects/project-sidebar'
 
 interface ProjectLayoutProps {
   children: React.ReactNode
-  params: Promise<{ id: string }>
+  params: Promise<{ code: string }>
 }
 
 export default async function ProjectLayout({ children, params }: ProjectLayoutProps) {
-  const { id: code } = await params
+  const { code } = await params
 
   const supabase = await createClient()
   const {

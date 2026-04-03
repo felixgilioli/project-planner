@@ -5,6 +5,7 @@ import { eq, and, ne } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { projects } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
+import { projectSchema } from '@/lib/validations/project'
 
 export async function getProjectByCode(code: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -34,6 +35,7 @@ export async function createProject(data: {
   description?: string
   color?: string
 }) {
+  projectSchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [existing] = await db
@@ -65,6 +67,7 @@ export async function updateProject(
     status?: string
   }
 ) {
+  projectSchema.partial().parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   if (data.code) {

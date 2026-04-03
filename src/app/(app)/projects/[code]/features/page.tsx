@@ -6,12 +6,12 @@ import { getMembers } from '@/app/actions/members'
 import { FeaturesClient } from './features-client'
 
 interface FeaturesPageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ code: string }>
   searchParams: Promise<{ feature?: string }>
 }
 
 export default async function FeaturesPage({ params, searchParams }: FeaturesPageProps) {
-  const { id: code } = await params
+  const { code } = await params
   const { feature: selectedFeatureId } = await searchParams
 
   const project = await getProjectByCode(code)

@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { activities, features, teamMembers } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
 import { calcEstimatedEndDate } from '@/lib/utils'
+import { createActivitySchema, updateActivitySchema } from '@/lib/validations/activity'
 
 async function resolveEstimatedEndDate(
   startDate: Date | null | undefined,
@@ -42,6 +43,7 @@ export async function createActivity(
     assignedMemberId?: string | null
   }
 ) {
+  createActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [feature] = await db
@@ -84,6 +86,7 @@ export async function updateActivity(
     displayOrder?: number
   }
 ) {
+  updateActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [activity] = await db

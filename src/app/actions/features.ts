@@ -5,6 +5,7 @@ import { eq, and, asc } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { features, projects } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
+import { featureSchema, updateFeatureSchema } from '@/lib/validations/feature'
 
 export async function getFeatures(projectId: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -28,6 +29,7 @@ export async function createFeature(
   projectId: string,
   data: { name: string; description?: string; priority?: string; status?: string }
 ) {
+  featureSchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [project] = await db
@@ -60,6 +62,7 @@ export async function updateFeature(
     displayOrder?: number
   }
 ) {
+  updateFeatureSchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [feature] = await db

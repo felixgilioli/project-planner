@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { registerUser } from './actions'
+import { registerUser } from '@/app/actions/auth'
 
 export default function RegisterPage() {
   const [state, action, isPending] = useActionState(registerUser, null)

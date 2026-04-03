@@ -33,6 +33,13 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname === '/login' || pathname === '/register'
   const isAppRoute = pathname.startsWith('/projects')
 
+  // Redirect root to the appropriate landing page
+  if (pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = user ? '/projects' : '/login'
+    return NextResponse.redirect(url)
+  }
+
   // Redirect unauthenticated users away from protected routes
   if (!user && isAppRoute) {
     const url = request.nextUrl.clone()

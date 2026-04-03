@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { teamMembers, projects, activities } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
 import { calcEstimatedEndDate } from '@/lib/utils'
+import { memberSchema } from '@/lib/validations/member'
 
 export async function getMembers(projectId: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -40,6 +41,7 @@ export async function createMember(
     dailyCapacityHours?: number
   },
 ) {
+  memberSchema.partial({ dailyCapacityHours: true }).parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [project] = await db
@@ -71,6 +73,7 @@ export async function updateMember(
     dailyCapacityHours?: number
   },
 ) {
+  memberSchema.partial().parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
   const [member] = await db
