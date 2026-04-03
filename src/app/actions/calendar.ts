@@ -5,6 +5,7 @@ import { eq, and, asc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { projects, calendars, calendarDays } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
+import { workingDaysSchema } from '@/lib/validations/calendar'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,20 +19,25 @@ export type CalendarResult = {
   calendarId: string | null
   days: CalendarDayData[]
   workingDaysCount: number
+  workingDays: number[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateYearDays(year: number): CalendarDayData[] {
+const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
+
+function generateYearDays(year: number, workingDays: number[] = DEFAULT_WORKING_DAYS): CalendarDayData[] {
   const days: CalendarDayData[] = []
   const start = new Date(year, 0, 1)
   const end = new Date(year, 11, 31)
+  const workingSet = new Set(workingDays)
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10)
+    const dow = d.getDay()
     days.push({
       date: dateStr,
-      type: 'working',
+      type: workingSet.has(dow) ? 'working' : 'non_working',
       reason: null,
     })
   }
@@ -89,11 +95,13 @@ export async function getCalendar(projectId: string, year: number): Promise<Cale
     .limit(1)
 
   if (!calendar) {
-    const days = generateYearDays(year)
+    const workingDays = DEFAULT_WORKING_DAYS
+    const days = generateYearDays(year, workingDays)
     return {
       calendarId: null,
       days,
       workingDaysCount: days.filter((d) => d.type === 'working').length,
+      workingDays,
     }
   }
 
@@ -113,6 +121,7 @@ export async function getCalendar(projectId: string, year: number): Promise<Cale
     calendarId: calendar.id,
     days,
     workingDaysCount: days.filter((d) => d.type === 'working').length,
+    workingDays: calendar.workingDays,
   }
 }
 
@@ -120,7 +129,10 @@ export async function saveCalendar(
   projectId: string,
   year: number,
   nonWorkingDays: { date: string; reason: string | null }[],
+  workingDays: number[] = DEFAULT_WORKING_DAYS,
 ): Promise<void> {
+  workingDaysSchema.parse(workingDays)
+
   const tenantId = await getAuthenticatedTenantId()
 
   const [project] = await db
@@ -134,25 +146,25 @@ export async function saveCalendar(
   // Upsert calendar record
   const [calendar] = await db
     .insert(calendars)
-    .values({ tenantId, projectId, year })
+    .values({ tenantId, projectId, year, workingDays })
     .onConflictDoUpdate({
       target: [calendars.projectId, calendars.year],
-      set: { updatedAt: new Date() },
+      set: { workingDays, updatedAt: new Date() },
     })
     .returning()
 
-  // Build non-working day lookup (excluding weekends — they're handled separately)
+  // Build non-working day lookup
   const nonWorkingMap = new Map(nonWorkingDays.map((d) => [d.date, d.reason]))
 
-  // Generate all days of the year
-  const allDays = generateYearDays(year)
+  // Generate all days of the year respecting workingDays config
+  const allDays = generateYearDays(year, workingDays)
 
-  // Build rows with correct type/reason
+  // Build rows: explicit non-working overrides take precedence, then config-derived type
   const rows = allDays.map((d) => {
     if (nonWorkingMap.has(d.date)) {
       return { calendarId: calendar.id, date: d.date, type: 'non_working' as const, reason: nonWorkingMap.get(d.date) ?? null }
     }
-    return { calendarId: calendar.id, date: d.date, type: 'working' as const, reason: null }
+    return { calendarId: calendar.id, date: d.date, type: d.type, reason: null }
   })
 
   // Upsert in chunks of 100 to avoid query size limits

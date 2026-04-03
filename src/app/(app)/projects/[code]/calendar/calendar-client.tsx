@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useTransition, useMemo, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, CalendarDays, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { PageHeader } from '@/components/shared/page-header'
 import { CalendarMonth } from '@/components/calendar/calendar-month'
 import { getCalendar, saveCalendar } from '@/app/actions/calendar'
@@ -16,14 +18,17 @@ import type { CalendarDayData } from '@/app/actions/calendar'
 interface CalendarClientProps {
   projectId: string
   initialYear: number
-  initialData: { calendarId: string | null; days: CalendarDayData[]; workingDaysCount: number }
+  initialData: { calendarId: string | null; days: CalendarDayData[]; workingDaysCount: number; workingDays: number[] }
 }
+
+const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function CalendarClient({ projectId, initialYear, initialData }: CalendarClientProps) {
   const [year, setYear] = useState(initialYear)
   const [days, setDays] = useState<CalendarDayData[]>(initialData.days)
+  const [weekConfig, setWeekConfig] = useState<number[]>(initialData.workingDays)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isLoadingYear, startLoadingYear] = useTransition()
@@ -31,11 +36,11 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   // Derived stats — memoized to avoid re-filtering 365 items on every render
-  const holidays = useMemo(
+  const nonWorkingCount = useMemo(
     () => days.filter((d) => d.type === 'non_working').length,
     [days],
   )
-  const workingDays = useMemo(() => days.filter((d) => d.type === 'working').length, [days])
+  const workingCount = useMemo(() => days.filter((d) => d.type === 'working').length, [days])
 
   // Pre-split days by month so each CalendarMonth doesn't re-filter the full 365-item array
   const daysByMonth = useMemo(() => {
@@ -54,12 +59,35 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
         const result = await getCalendar(projectId, newYear)
         setYear(newYear)
         setDays(result.days)
+        setWeekConfig(result.workingDays)
         setIsDirty(false)
       } catch {
         toast.error('Erro ao carregar calendário.')
       }
     })
   }, [year, projectId])
+
+  function handleWeekConfigChange(dow: number) {
+    const next = weekConfig.includes(dow)
+      ? weekConfig.filter((d) => d !== dow)
+      : [...weekConfig, dow]
+
+    if (next.length === 0) return // garante ao menos 1 dia útil
+
+    setWeekConfig(next)
+
+    // Re-deriva os dias: apenas dias sem reason explícito são afetados
+    const nextSet = new Set(next)
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.reason !== null) return d // feriado/override explícito — não mexe
+        const dow = new Date(d.date + 'T12:00:00').getDay()
+        return { ...d, type: nextSet.has(dow) ? 'working' : 'non_working' }
+      }),
+    )
+
+    setIsDirty(true)
+  }
 
   function handleDayChange(date: string, type: 'working' | 'non_working', reason: string | null) {
     setDays((prev) =>
@@ -75,7 +103,7 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
           .filter((d) => d.type === 'non_working')
           .map((d) => ({ date: d.date, reason: d.reason }))
 
-        await saveCalendar(projectId, year, nonWorkingDays)
+        await saveCalendar(projectId, year, nonWorkingDays, weekConfig)
         setIsDirty(false)
         toast.success('Calendário salvo com sucesso.')
       } catch {
@@ -98,6 +126,44 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
                 Alterações pendentes
               </Badge>
             )}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Settings2 className="h-4 w-4" />
+                  Configurações
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72">
+                <SheetHeader>
+                  <SheetTitle>Configurações do calendário</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Dias úteis da semana</p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione quais dias da semana são considerados úteis neste projeto.
+                    </p>
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {DAY_LABELS.map((label, dow) => (
+                        <button
+                          key={dow}
+                          type="button"
+                          onClick={() => handleWeekConfigChange(dow)}
+                          className={cn(
+                            'h-8 w-12 rounded text-xs font-medium border transition-colors',
+                            weekConfig.includes(dow)
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground border-border hover:bg-accent',
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
             <Button
               size="sm"
               onClick={handleSave}
@@ -140,11 +206,11 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-4">
           <Card className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">{workingDays}</p>
+            <p className="text-2xl font-bold text-primary">{workingCount}</p>
             <p className="text-xs text-muted-foreground mt-1">Dias úteis</p>
           </Card>
           <Card className="p-4 text-center">
-            <p className="text-2xl font-bold text-destructive">{holidays}</p>
+            <p className="text-2xl font-bold text-destructive">{nonWorkingCount}</p>
             <p className="text-xs text-muted-foreground mt-1">Dias não úteis</p>
           </Card>
         </div>

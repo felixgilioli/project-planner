@@ -168,6 +168,7 @@ export const calendars = pgTable(
       .notNull()
       .references(() => projects.id),
     year: integer('year').notNull(),
+    workingDays: integer('working_days').array().notNull().default([1, 2, 3, 4, 5]),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
