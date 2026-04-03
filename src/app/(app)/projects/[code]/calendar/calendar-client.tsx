@@ -26,13 +26,14 @@ interface CalendarClientProps {
     workingDaysCount: number
     workingDays: number[]
   }
+  members: { id: string; name: string }[]
 }
 
 const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function CalendarClient({ projectId, initialYear, initialData }: CalendarClientProps) {
+export function CalendarClient({ projectId, initialYear, initialData, members }: CalendarClientProps) {
   const [year, setYear] = useState(initialYear)
   const [events, setEvents] = useState<CalendarEventData[]>(initialData.events)
   const [weekConfig, setWeekConfig] = useState<number[]>(initialData.workingDays)
@@ -237,6 +238,7 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
         open={isEventDialogOpen}
         onOpenChange={setIsEventDialogOpen}
         onEventCreate={handleEventCreate}
+        members={members}
       />
     </div>
   )

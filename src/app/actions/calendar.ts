@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { eq, and } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { projects, calendars, calendarEvents } from '@/lib/db/schema'
+import { projects, calendars, calendarEvents, teamMembers } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
 import { workingDaysSchema, calendarEventSchema } from '@/lib/validations/calendar'
 import {
@@ -62,8 +62,17 @@ export async function getCalendar(projectId: string, year: number): Promise<Cale
   }
 
   const dbEvents = await db
-    .select()
+    .select({
+      id: calendarEvents.id,
+      type: calendarEvents.type,
+      startDate: calendarEvents.startDate,
+      endDate: calendarEvents.endDate,
+      memberId: calendarEvents.memberId,
+      label: calendarEvents.label,
+      memberName: teamMembers.name,
+    })
     .from(calendarEvents)
+    .leftJoin(teamMembers, eq(calendarEvents.memberId, teamMembers.id))
     .where(eq(calendarEvents.calendarId, calendar.id))
 
   const events: CalendarEventData[] = dbEvents.map((e) => ({
@@ -72,6 +81,7 @@ export async function getCalendar(projectId: string, year: number): Promise<Cale
     startDate: e.startDate,
     endDate: e.endDate,
     memberId: e.memberId,
+    memberName: e.memberName ?? null,
     label: e.label,
   }))
 

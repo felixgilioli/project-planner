@@ -105,6 +105,7 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
 
   const isNonWorking = dayData.type === 'non_working'
   const isFreeze = dayData.eventType === 'freeze'
+  const hasMemberEvents = dayData.events.some((e) => e.memberId !== null)
   const dayNum = parseInt(dateStr.slice(8))
 
   return (
@@ -113,9 +114,9 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
         <button
           title={dayData.reason ?? undefined}
           className={cn(
-            'flex items-center justify-center rounded text-[11px] h-7 w-full cursor-pointer transition-colors',
+            'flex flex-col items-center justify-center rounded text-[11px] h-7 w-full cursor-pointer transition-colors',
             'hover:bg-accent hover:text-accent-foreground',
-            // non-working (holiday, vacation, day_off)
+            // non-working (holiday)
             isNonWorking && !isFreeze && 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400',
             // freeze — working day, purple ring
             isFreeze && 'ring-1 ring-inset ring-purple-400 text-foreground',
@@ -126,7 +127,10 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
             isToday && isFreeze && 'ring-primary',
           )}
         >
-          {dayNum}
+          <span>{dayNum}</span>
+          {hasMemberEvents && (
+            <span className="h-1 w-1 rounded-full bg-blue-400 dark:bg-blue-500" />
+          )}
         </button>
       </PopoverTrigger>
 
@@ -147,6 +151,9 @@ function DayCell({ dateStr, dayData, isToday, onEventRemove }: DayCellProps) {
                   <p className="text-xs font-medium">
                     {EVENT_TYPE_LABELS[event.type] ?? event.type}
                   </p>
+                  {event.memberName && (
+                    <p className="text-xs text-muted-foreground">{event.memberName}</p>
+                  )}
                   {event.label && (
                     <p className="text-xs text-muted-foreground truncate">{event.label}</p>
                   )}

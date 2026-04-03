@@ -16,6 +16,7 @@ export type CalendarEventData = {
   startDate: string // 'YYYY-MM-DD'
   endDate: string   // 'YYYY-MM-DD'
   memberId: string | null
+  memberName?: string | null // populated via join in getCalendar
   label: string
 }
 
@@ -63,10 +64,10 @@ export function computeDaysFromEvents(
 
       if (event.type === 'extra_working') {
         day.type = 'working'
-      } else if (event.type === 'freeze') {
-        // freeze is informational — day keeps its base working/non_working type
+      } else if (event.type === 'freeze' || event.type === 'vacation' || event.type === 'day_off') {
+        // informational only — day keeps its base type (member-specific, no global impact)
       } else {
-        // holiday | vacation | day_off
+        // holiday → non_working for the whole project
         day.type = 'non_working'
       }
     }
