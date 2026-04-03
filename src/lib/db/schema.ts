@@ -179,23 +179,38 @@ export const calendars = pgTable(
   ],
 )
 
-export const calendarDays = pgTable(
-  'calendar_days',
+export const calendarEventTypeEnum = pgEnum('calendar_event_type', [
+  'holiday',
+  'vacation',
+  'day_off',
+  'freeze',
+  'extra_working',
+])
+
+export const calendarEvents = pgTable(
+  'calendar_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
     calendarId: uuid('calendar_id')
       .notNull()
       .references(() => calendars.id, { onDelete: 'cascade' }),
-    date: date('date').notNull(),
-    type: text('type').notNull(), // 'working' | 'non_working'
-    reason: text('reason'),
+    type: calendarEventTypeEnum('type').notNull(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    memberId: uuid('member_id').references(() => teamMembers.id, { onDelete: 'set null' }),
+    label: text('label').notNull(),
   },
   (t) => [
-    unique('calendar_days_calendar_date_unique').on(t.calendarId, t.date),
+    index('calendar_events_tenant_idx').on(t.tenantId),
+    index('calendar_events_calendar_idx').on(t.calendarId),
+    index('calendar_events_member_idx').on(t.memberId),
   ],
 )
 
 export type Calendar = typeof calendars.$inferSelect
 export type NewCalendar = typeof calendars.$inferInsert
-export type CalendarDay = typeof calendarDays.$inferSelect
-export type NewCalendarDay = typeof calendarDays.$inferInsert
+export type CalendarEvent = typeof calendarEvents.$inferSelect
+export type NewCalendarEvent = typeof calendarEvents.$inferInsert

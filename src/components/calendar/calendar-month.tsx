@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import type { CalendarDayData } from '@/app/actions/calendar'
+import type { CalendarDayData } from '@/lib/calendar-utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

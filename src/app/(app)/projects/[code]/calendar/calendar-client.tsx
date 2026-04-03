@@ -11,14 +11,20 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { PageHeader } from '@/components/shared/page-header'
 import { CalendarMonth } from '@/components/calendar/calendar-month'
 import { getCalendar, saveCalendar } from '@/app/actions/calendar'
-import type { CalendarDayData } from '@/app/actions/calendar'
+import { computeDaysFromEvents } from '@/lib/calendar-utils'
+import type { CalendarEventData } from '@/app/actions/calendar'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CalendarClientProps {
   projectId: string
   initialYear: number
-  initialData: { calendarId: string | null; days: CalendarDayData[]; workingDaysCount: number; workingDays: number[] }
+  initialData: {
+    calendarId: string | null
+    events: CalendarEventData[]
+    workingDaysCount: number
+    workingDays: number[]
+  }
 }
 
 const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -27,7 +33,7 @@ const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export function CalendarClient({ projectId, initialYear, initialData }: CalendarClientProps) {
   const [year, setYear] = useState(initialYear)
-  const [days, setDays] = useState<CalendarDayData[]>(initialData.days)
+  const [events, setEvents] = useState<CalendarEventData[]>(initialData.events)
   const [weekConfig, setWeekConfig] = useState<number[]>(initialData.workingDays)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, startSaving] = useTransition()
@@ -35,16 +41,19 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
-  // Derived stats — memoized to avoid re-filtering 365 items on every render
-  const nonWorkingCount = useMemo(
-    () => days.filter((d) => d.type === 'non_working').length,
-    [days],
+  // Derived days — computed from events + weekConfig
+  const days = useMemo(
+    () => computeDaysFromEvents(year, weekConfig, events),
+    [year, weekConfig, events],
   )
+
+  // Derived stats
+  const nonWorkingCount = useMemo(() => days.filter((d) => d.type === 'non_working').length, [days])
   const workingCount = useMemo(() => days.filter((d) => d.type === 'working').length, [days])
 
   // Pre-split days by month so each CalendarMonth doesn't re-filter the full 365-item array
   const daysByMonth = useMemo(() => {
-    const buckets: CalendarDayData[][] = Array.from({ length: 12 }, () => [])
+    const buckets = Array.from({ length: 12 }, () => [] as typeof days)
     for (const d of days) {
       const month = parseInt(d.date.slice(5, 7)) - 1
       buckets[month].push(d)
@@ -58,7 +67,7 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
       try {
         const result = await getCalendar(projectId, newYear)
         setYear(newYear)
-        setDays(result.days)
+        setEvents(result.events)
         setWeekConfig(result.workingDays)
         setIsDirty(false)
       } catch {
@@ -75,35 +84,62 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
     if (next.length === 0) return // garante ao menos 1 dia útil
 
     setWeekConfig(next)
-
-    // Re-deriva os dias: apenas dias sem reason explícito são afetados
-    const nextSet = new Set(next)
-    setDays((prev) =>
-      prev.map((d) => {
-        if (d.reason !== null) return d // feriado/override explícito — não mexe
-        const dow = new Date(d.date + 'T12:00:00').getDay()
-        return { ...d, type: nextSet.has(dow) ? 'working' : 'non_working' }
-      }),
-    )
-
     setIsDirty(true)
   }
 
   function handleDayChange(date: string, type: 'working' | 'non_working', reason: string | null) {
-    setDays((prev) =>
-      prev.map((d) => (d.date === date ? { ...d, type, reason } : d)),
-    )
+    setEvents((prev) => {
+      // Remove qualquer evento single-day (holiday ou extra_working) nessa data
+      const filtered = prev.filter(
+        (e) =>
+          !(
+            e.startDate === date &&
+            e.endDate === date &&
+            (e.type === 'holiday' || e.type === 'extra_working')
+          ),
+      )
+
+      const dow = new Date(date + 'T12:00:00').getDay()
+      const baseIsWorking = weekConfig.includes(dow)
+
+      if (type === 'non_working' && baseIsWorking) {
+        // Dia normalmente útil marcado como não-útil → holiday
+        return [
+          ...filtered,
+          {
+            id: crypto.randomUUID(),
+            type: 'holiday' as const,
+            startDate: date,
+            endDate: date,
+            memberId: null,
+            label: reason ?? '',
+          },
+        ]
+      }
+      if (type === 'working' && !baseIsWorking) {
+        // Dia normalmente não-útil marcado como útil → extra_working
+        return [
+          ...filtered,
+          {
+            id: crypto.randomUUID(),
+            type: 'extra_working' as const,
+            startDate: date,
+            endDate: date,
+            memberId: null,
+            label: reason ?? '',
+          },
+        ]
+      }
+
+      return filtered // voltou ao estado base — remove override
+    })
     setIsDirty(true)
   }
 
   function handleSave() {
     startSaving(async () => {
       try {
-        const nonWorkingDays = days
-          .filter((d) => d.type === 'non_working')
-          .map((d) => ({ date: d.date, reason: d.reason }))
-
-        await saveCalendar(projectId, year, nonWorkingDays, weekConfig)
+        await saveCalendar(projectId, year, events, weekConfig)
         setIsDirty(false)
         toast.success('Calendário salvo com sucesso.')
       } catch {
