@@ -1,12 +1,14 @@
 // Pure calendar helpers — no 'use server', safe to import in client components
 
+export type CalendarEventType = 'holiday' | 'vacation' | 'day_off' | 'freeze' | 'extra_working'
+
 export type CalendarDayData = {
   date: string // 'YYYY-MM-DD'
   type: 'working' | 'non_working'
   reason: string | null
+  eventType?: CalendarEventType // dominant event type (last processed), used for visual hints
+  events: CalendarEventData[]  // all events covering this day
 }
-
-export type CalendarEventType = 'holiday' | 'vacation' | 'day_off' | 'freeze' | 'extra_working'
 
 export type CalendarEventData = {
   id: string
@@ -33,6 +35,7 @@ export function generateYearDays(
       date: dateStr,
       type: workingSet.has(d.getDay()) ? 'working' : 'non_working',
       reason: null,
+      events: [],
     })
   }
 
@@ -53,12 +56,18 @@ export function computeDaysFromEvents(
       const dateStr = d.toISOString().slice(0, 10)
       const day = dayMap.get(dateStr)
       if (!day) continue
+
+      day.eventType = event.type
+      day.reason = event.label || null
+      day.events.push(event)
+
       if (event.type === 'extra_working') {
         day.type = 'working'
-        day.reason = event.label || null
+      } else if (event.type === 'freeze') {
+        // freeze is informational — day keeps its base working/non_working type
       } else {
+        // holiday | vacation | day_off
         day.type = 'non_working'
-        day.reason = event.label || null
       }
     }
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, CalendarDays, Settings2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, CalendarDays, Settings2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { PageHeader } from '@/components/shared/page-header'
 import { CalendarMonth } from '@/components/calendar/calendar-month'
+import { EventDialog } from '@/components/calendar/event-dialog'
 import { getCalendar, saveCalendar } from '@/app/actions/calendar'
 import { computeDaysFromEvents } from '@/lib/calendar-utils'
 import type { CalendarEventData } from '@/app/actions/calendar'
@@ -36,6 +37,7 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
   const [events, setEvents] = useState<CalendarEventData[]>(initialData.events)
   const [weekConfig, setWeekConfig] = useState<number[]>(initialData.workingDays)
   const [isDirty, setIsDirty] = useState(false)
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isLoadingYear, startLoadingYear] = useTransition()
 
@@ -87,52 +89,13 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
     setIsDirty(true)
   }
 
-  function handleDayChange(date: string, type: 'working' | 'non_working', reason: string | null) {
-    setEvents((prev) => {
-      // Remove qualquer evento single-day (holiday ou extra_working) nessa data
-      const filtered = prev.filter(
-        (e) =>
-          !(
-            e.startDate === date &&
-            e.endDate === date &&
-            (e.type === 'holiday' || e.type === 'extra_working')
-          ),
-      )
+  function handleEventCreate(event: Omit<CalendarEventData, 'id'>) {
+    setEvents((prev) => [...prev, { ...event, id: crypto.randomUUID() }])
+    setIsDirty(true)
+  }
 
-      const dow = new Date(date + 'T12:00:00').getDay()
-      const baseIsWorking = weekConfig.includes(dow)
-
-      if (type === 'non_working' && baseIsWorking) {
-        // Dia normalmente útil marcado como não-útil → holiday
-        return [
-          ...filtered,
-          {
-            id: crypto.randomUUID(),
-            type: 'holiday' as const,
-            startDate: date,
-            endDate: date,
-            memberId: null,
-            label: reason ?? '',
-          },
-        ]
-      }
-      if (type === 'working' && !baseIsWorking) {
-        // Dia normalmente não-útil marcado como útil → extra_working
-        return [
-          ...filtered,
-          {
-            id: crypto.randomUUID(),
-            type: 'extra_working' as const,
-            startDate: date,
-            endDate: date,
-            memberId: null,
-            label: reason ?? '',
-          },
-        ]
-      }
-
-      return filtered // voltou ao estado base — remove override
-    })
+  function handleEventRemove(eventId: string) {
+    setEvents((prev) => prev.filter((e) => e.id !== eventId))
     setIsDirty(true)
   }
 
@@ -162,6 +125,10 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
                 Alterações pendentes
               </Badge>
             )}
+            <Button variant="outline" size="sm" onClick={() => setIsEventDialogOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Criar evento
+            </Button>
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
@@ -260,11 +227,17 @@ export function CalendarClient({ projectId, initialYear, initialData }: Calendar
               month={month}
               days={daysByMonth[month]}
               today={todayStr}
-              onDayChange={handleDayChange}
+              onEventRemove={handleEventRemove}
             />
           ))}
         </div>
       </div>
+
+      <EventDialog
+        open={isEventDialogOpen}
+        onOpenChange={setIsEventDialogOpen}
+        onEventCreate={handleEventCreate}
+      />
     </div>
   )
 }
