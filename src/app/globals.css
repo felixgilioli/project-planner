@@ -1,3 +1,5 @@
+@import '../styles/frappe-gantt.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -57,3 +59,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Gantt: cores por prioridade */
+.bar-critical .bar { fill: #EF4444 }
+.bar-high     .bar { fill: #F59E0B }
+.bar-medium   .bar { fill: #6366F1 }
+.bar-low      .bar { fill: #94A3B8 }
