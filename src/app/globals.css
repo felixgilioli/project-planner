@@ -60,8 +60,42 @@
   }
 }
 
-/* Gantt: cores por prioridade */
-.bar-critical .bar { fill: #EF4444 }
-.bar-high     .bar { fill: #F59E0B }
-.bar-medium   .bar { fill: #6366F1 }
-.bar-low      .bar { fill: #94A3B8 }
+/* Gantt: paleta Material Design (19 famílias, 500=feature, 300=atividade) */
+/* fc0  Red         */ .gantt .bar-fc0        .bar { fill: #F44336 } .gantt .bar-fc0        .bar-label,.gantt .bar-fc0        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc0-light  .bar { fill: #E57373 } .gantt .bar-fc0-light  .bar-label,.gantt .bar-fc0-light  .bar-label.big { fill: #FFFFFF }
+/* fc1  Pink        */ .gantt .bar-fc1        .bar { fill: #E91E63 } .gantt .bar-fc1        .bar-label,.gantt .bar-fc1        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc1-light  .bar { fill: #F06292 } .gantt .bar-fc1-light  .bar-label,.gantt .bar-fc1-light  .bar-label.big { fill: #212121 }
+/* fc2  Purple      */ .gantt .bar-fc2        .bar { fill: #9C27B0 } .gantt .bar-fc2        .bar-label,.gantt .bar-fc2        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc2-light  .bar { fill: #BA68C8 } .gantt .bar-fc2-light  .bar-label,.gantt .bar-fc2-light  .bar-label.big { fill: #FFFFFF }
+/* fc3  Deep Purple */ .gantt .bar-fc3        .bar { fill: #673AB7 } .gantt .bar-fc3        .bar-label,.gantt .bar-fc3        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc3-light  .bar { fill: #9575CD } .gantt .bar-fc3-light  .bar-label,.gantt .bar-fc3-light  .bar-label.big { fill: #FFFFFF }
+/* fc4  Indigo      */ .gantt .bar-fc4        .bar { fill: #3F51B5 } .gantt .bar-fc4        .bar-label,.gantt .bar-fc4        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc4-light  .bar { fill: #7986CB } .gantt .bar-fc4-light  .bar-label,.gantt .bar-fc4-light  .bar-label.big { fill: #FFFFFF }
+/* fc5  Blue        */ .gantt .bar-fc5        .bar { fill: #2196F3 } .gantt .bar-fc5        .bar-label,.gantt .bar-fc5        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc5-light  .bar { fill: #64B5F6 } .gantt .bar-fc5-light  .bar-label,.gantt .bar-fc5-light  .bar-label.big { fill: #212121 }
+/* fc6  Light Blue  */ .gantt .bar-fc6        .bar { fill: #03A9F4 } .gantt .bar-fc6        .bar-label,.gantt .bar-fc6        .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc6-light  .bar { fill: #4FC3F7 } .gantt .bar-fc6-light  .bar-label,.gantt .bar-fc6-light  .bar-label.big { fill: #212121 }
+/* fc7  Cyan        */ .gantt .bar-fc7        .bar { fill: #00BCD4 } .gantt .bar-fc7        .bar-label,.gantt .bar-fc7        .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc7-light  .bar { fill: #4DD0E1 } .gantt .bar-fc7-light  .bar-label,.gantt .bar-fc7-light  .bar-label.big { fill: #212121 }
+/* fc8  Teal        */ .gantt .bar-fc8        .bar { fill: #009688 } .gantt .bar-fc8        .bar-label,.gantt .bar-fc8        .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc8-light  .bar { fill: #4DB6AC } .gantt .bar-fc8-light  .bar-label,.gantt .bar-fc8-light  .bar-label.big { fill: #212121 }
+/* fc9  Green       */ .gantt .bar-fc9        .bar { fill: #4CAF50 } .gantt .bar-fc9        .bar-label,.gantt .bar-fc9        .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc9-light  .bar { fill: #81C784 } .gantt .bar-fc9-light  .bar-label,.gantt .bar-fc9-light  .bar-label.big { fill: #212121 }
+/* fc10 Light Green */ .gantt .bar-fc10       .bar { fill: #8BC34A } .gantt .bar-fc10       .bar-label,.gantt .bar-fc10       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc10-light .bar { fill: #AED581 } .gantt .bar-fc10-light .bar-label,.gantt .bar-fc10-light .bar-label.big { fill: #212121 }
+/* fc11 Lime        */ .gantt .bar-fc11       .bar { fill: #CDDC39 } .gantt .bar-fc11       .bar-label,.gantt .bar-fc11       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc11-light .bar { fill: #DCE775 } .gantt .bar-fc11-light .bar-label,.gantt .bar-fc11-light .bar-label.big { fill: #212121 }
+/* fc12 Yellow      */ .gantt .bar-fc12       .bar { fill: #FFEB3B } .gantt .bar-fc12       .bar-label,.gantt .bar-fc12       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc12-light .bar { fill: #FFF176 } .gantt .bar-fc12-light .bar-label,.gantt .bar-fc12-light .bar-label.big { fill: #212121 }
+/* fc13 Amber       */ .gantt .bar-fc13       .bar { fill: #FFC107 } .gantt .bar-fc13       .bar-label,.gantt .bar-fc13       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc13-light .bar { fill: #FFD54F } .gantt .bar-fc13-light .bar-label,.gantt .bar-fc13-light .bar-label.big { fill: #212121 }
+/* fc14 Orange      */ .gantt .bar-fc14       .bar { fill: #FF9800 } .gantt .bar-fc14       .bar-label,.gantt .bar-fc14       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc14-light .bar { fill: #FFB74D } .gantt .bar-fc14-light .bar-label,.gantt .bar-fc14-light .bar-label.big { fill: #212121 }
+/* fc15 Deep Orange */ .gantt .bar-fc15       .bar { fill: #FF5722 } .gantt .bar-fc15       .bar-label,.gantt .bar-fc15       .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc15-light .bar { fill: #FF8A65 } .gantt .bar-fc15-light .bar-label,.gantt .bar-fc15-light .bar-label.big { fill: #212121 }
+/* fc16 Brown       */ .gantt .bar-fc16       .bar { fill: #795548 } .gantt .bar-fc16       .bar-label,.gantt .bar-fc16       .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc16-light .bar { fill: #A1887F } .gantt .bar-fc16-light .bar-label,.gantt .bar-fc16-light .bar-label.big { fill: #FFFFFF }
+/* fc17 Grey        */ .gantt .bar-fc17       .bar { fill: #9E9E9E } .gantt .bar-fc17       .bar-label,.gantt .bar-fc17       .bar-label.big { fill: #212121 }
+                       .gantt .bar-fc17-light .bar { fill: #E0E0E0 } .gantt .bar-fc17-light .bar-label,.gantt .bar-fc17-light .bar-label.big { fill: #212121 }
+/* fc18 Blue Grey   */ .gantt .bar-fc18       .bar { fill: #607D8B } .gantt .bar-fc18       .bar-label,.gantt .bar-fc18       .bar-label.big { fill: #FFFFFF }
+                       .gantt .bar-fc18-light .bar { fill: #90A4AE } .gantt .bar-fc18-light .bar-label,.gantt .bar-fc18-light .bar-label.big { fill: #212121 }

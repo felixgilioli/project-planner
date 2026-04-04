@@ -27,11 +27,18 @@ function progressFromStatus(status: string): number {
   return 0
 }
 
+const FEATURE_COLOR_COUNT = 19
+
 function buildTasks(data: GanttData): GanttTask[] {
   const result: GanttTask[] = []
+  let colorIdx = 0
 
   for (const { feature, activities } of data.items) {
     if (activities.length === 0) continue
+
+    const featureClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}`
+    const activityClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}-light`
+    colorIdx++
 
     const starts = activities.map((a) => new Date(a.startDate!).getTime())
     const ends = activities.map((a) => new Date(a.estimatedEndDate!).getTime())
@@ -45,7 +52,7 @@ function buildTasks(data: GanttData): GanttTask[] {
       end: toDateStr(maxEnd),
       progress: progressFromStatus(feature.status),
       dependencies: '',
-      custom_class: `bar-${feature.priority}`,
+      custom_class: featureClass,
       _isFeature: true,
     })
 
@@ -57,7 +64,7 @@ function buildTasks(data: GanttData): GanttTask[] {
         end: toDateStr(new Date(act.estimatedEndDate!)),
         progress: progressFromStatus(act.status),
         dependencies: '',
-        custom_class: '',
+        custom_class: activityClass,
         _memberName: act.memberName ?? null,
         _estimatedHours: Number(act.estimatedHours),
         _status: act.status,
