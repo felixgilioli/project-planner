@@ -203,13 +203,17 @@ function FeatureDetail({
   const activitiesById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities])
 
 
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
+
   const [editingName, setEditingName] = useState(false)
+  const [editingDescription, setEditingDescription] = useState(false)
   const [editingField, setEditingField] = useState<'status' | 'priority' | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [activityModalOpen, setActivityModalOpen] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
 
   const [isSavingName, setIsSavingName] = useState(false)
+  const [isSavingDescription, setIsSavingDescription] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isUpdatingPriority, setIsUpdatingPriority] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -218,6 +222,7 @@ function FeatureDetail({
   // Reset editing state when the selected feature changes
   useEffect(() => {
     setEditingName(false)
+    setEditingDescription(false)
     setEditingField(null)
     setActivityModalOpen(false)
     setEditingActivity(null)
@@ -238,6 +243,24 @@ function FeatureDetail({
     } finally {
       setIsSavingName(false)
       setEditingName(false)
+    }
+  }
+
+  async function handleSaveDescription() {
+    const description = descriptionRef.current?.value.trim() ?? ''
+    if (description === (feature.description ?? '')) {
+      setEditingDescription(false)
+      return
+    }
+    setIsSavingDescription(true)
+    try {
+      await updateFeature(feature.id, { description: description || undefined })
+      toast.success('Descrição atualizada.')
+    } catch {
+      toast.error('Erro ao atualizar descrição.')
+    } finally {
+      setIsSavingDescription(false)
+      setEditingDescription(false)
     }
   }
 
@@ -401,6 +424,59 @@ function FeatureDetail({
             >
               {isUpdatingPriority ? <Loader2 className="h-3 w-3 animate-spin" /> : pCfg.label}
             </Badge>
+          )}
+        </div>
+
+        {/* Description */}
+        <div className="mt-3">
+          {editingDescription ? (
+            <div className="flex flex-col gap-1.5">
+              <textarea
+                ref={descriptionRef}
+                defaultValue={feature.description ?? ''}
+                autoFocus
+                className="text-sm text-muted-foreground bg-transparent border border-border rounded-md px-2 py-1.5 focus:outline-none focus:border-primary resize-none min-h-[72px]"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditingDescription(false)
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSaveDescription()
+                }}
+              />
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={handleSaveDescription}
+                  disabled={isSavingDescription}
+                >
+                  {isSavingDescription ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Salvar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setEditingDescription(false)}
+                  disabled={isSavingDescription}
+                >
+                  <X className="h-3 w-3" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p
+              className={cn(
+                'text-sm cursor-pointer rounded px-1 py-0.5 -mx-1 transition-colors',
+                feature.description
+                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  : 'text-muted-foreground/50 italic hover:bg-muted'
+              )}
+              onClick={() => setEditingDescription(true)}
+              title="Clique para editar a descrição"
+            >
+              {feature.description || 'Adicionar descrição…'}
+            </p>
           )}
         </div>
       </div>
