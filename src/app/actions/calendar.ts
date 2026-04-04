@@ -13,6 +13,7 @@ import {
   type CalendarEventType,
   type CalendarEventData,
 } from '@/lib/calendar-utils'
+import { recalculateProjectActivities } from '@/app/actions/activities'
 import { z } from 'zod'
 
 // Re-export types consumed by client components
@@ -142,5 +143,8 @@ export async function saveCalendar(
     )
   }
 
+  await recalculateProjectActivities(projectId, tenantId)
+
   revalidatePath(`/projects/${projectId}/calendar`)
+  revalidatePath(`/projects/${projectId}/features`)
 }

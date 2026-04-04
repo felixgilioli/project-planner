@@ -1,11 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { eq, and, asc, isNotNull } from 'drizzle-orm'
+import { eq, and, asc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { teamMembers, projects, activities } from '@/lib/db/schema'
+import { teamMembers, projects } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
-import { calcEstimatedEndDate } from '@/lib/utils'
+import { recalculateProjectActivities } from '@/app/actions/activities'
 import { memberSchema } from '@/lib/validations/member'
 
 export async function getMembers(projectId: string) {
@@ -97,34 +97,8 @@ export async function updateMember(
     .where(and(eq(teamMembers.id, id), eq(teamMembers.tenantId, tenantId)))
 
   if (dailyCapacityHours !== undefined) {
-    const assigned = await db
-      .select({
-        id: activities.id,
-        startDate: activities.startDate,
-        estimatedHours: activities.estimatedHours,
-      })
-      .from(activities)
-      .where(
-        and(
-          eq(activities.assignedMemberId, id),
-          eq(activities.tenantId, tenantId),
-          isNotNull(activities.startDate),
-        ),
-      )
-
-    await Promise.all(
-      assigned.map((activity) => {
-        const estimatedEndDate = calcEstimatedEndDate(
-          activity.startDate!,
-          parseFloat(activity.estimatedHours ?? '0'),
-          dailyCapacityHours,
-        )
-        return db
-          .update(activities)
-          .set({ estimatedEndDate, updatedAt: new Date() })
-          .where(eq(activities.id, activity.id))
-      }),
-    )
+    await recalculateProjectActivities(member.projectId, tenantId)
+    revalidatePath(`/projects/${member.projectId}/features`)
   }
 
   revalidatePath(`/projects/${member.projectId}/members`)

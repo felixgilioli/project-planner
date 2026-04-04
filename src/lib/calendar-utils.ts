@@ -1,4 +1,5 @@
 // Pure calendar helpers — no 'use server', safe to import in client components
+// Also exports calendar-aware end-date calculation used by server actions
 
 export type CalendarEventType = 'holiday' | 'vacation' | 'day_off' | 'freeze' | 'extra_working'
 
@@ -42,6 +43,92 @@ export function generateYearDays(
 
   return days
 }
+
+// ─── Calendar-aware end date calculation ─────────────────────────────────────
+
+export type CalendarContext = {
+  workingDays: number[]
+  globalBlockedDates: Set<string> // holidays — 'YYYY-MM-DD'
+  memberBlockedDates: Set<string> // vacation/day_off for the assigned member
+  extraWorkingDates: Set<string>  // extra_working overrides
+}
+
+function expandDateRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = []
+  const end = new Date(endDate + 'T12:00:00')
+  for (let d = new Date(startDate + 'T12:00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10))
+  }
+  return dates
+}
+
+export function buildCalendarContext(
+  workingDays: number[],
+  events: CalendarEventData[],
+  memberId: string | null,
+): CalendarContext {
+  const globalBlockedDates = new Set<string>()
+  const memberBlockedDates = new Set<string>()
+  const extraWorkingDates = new Set<string>()
+
+  for (const event of events) {
+    const dates = expandDateRange(event.startDate, event.endDate)
+    if (event.type === 'extra_working') {
+      for (const d of dates) extraWorkingDates.add(d)
+    } else if (event.type === 'holiday') {
+      for (const d of dates) globalBlockedDates.add(d)
+    } else if (
+      (event.type === 'vacation' || event.type === 'day_off') &&
+      memberId !== null &&
+      event.memberId === memberId
+    ) {
+      for (const d of dates) memberBlockedDates.add(d)
+    }
+    // freeze → informational only, ignored
+  }
+
+  return { workingDays, globalBlockedDates, memberBlockedDates, extraWorkingDates }
+}
+
+export function calcEndDateWithCalendar(
+  startDate: Date,
+  estimatedHours: number,
+  dailyCapacityHours: number,
+  ctx: CalendarContext,
+): Date | null {
+  if (estimatedHours <= 0 || dailyCapacityHours <= 0) return null
+
+  const daysNeeded = Math.ceil(estimatedHours / dailyCapacityHours)
+  const workingSet = new Set(ctx.workingDays)
+
+  // Normalise to UTC noon to avoid DST drift when calling setUTCDate
+  const current = new Date(startDate)
+  current.setUTCHours(12, 0, 0, 0)
+
+  let counted = 0
+  const maxIter = daysNeeded * 10 + 730 // safety cap
+
+  for (let i = 0; i < maxIter; i++) {
+    const dateStr = current.toISOString().slice(0, 10)
+    const isExtra = ctx.extraWorkingDates.has(dateStr)
+    const isHoliday = ctx.globalBlockedDates.has(dateStr)
+    const isMemberOff = ctx.memberBlockedDates.has(dateStr)
+    const baseWorking = workingSet.has(current.getUTCDay())
+
+    const valid = (isExtra || baseWorking) && !isHoliday && !isMemberOff
+
+    if (valid) {
+      counted++
+      if (counted === daysNeeded) return new Date(current)
+    }
+
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return null // safety cap reached (misconfigured calendar)
+}
+
+// ─── Year-grid helpers ────────────────────────────────────────────────────────
 
 export function computeDaysFromEvents(
   year: number,

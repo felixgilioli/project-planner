@@ -434,9 +434,9 @@ function FeatureDetail({
                   )}
                   {activity.startDate && (
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {new Date(activity.startDate).toLocaleDateString('pt-BR')}
+                      {formatUTCDateBR(activity.startDate)}
                       {activity.estimatedEndDate && (
-                        <> → {new Date(activity.estimatedEndDate).toLocaleDateString('pt-BR')}</>
+                        <> → {formatUTCDateBR(activity.estimatedEndDate)}</>
                       )}
                     </span>
                   )}
@@ -529,6 +529,13 @@ function toDateInputValue(date: Date | string | null | undefined): string {
   if (!date) return ''
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toISOString().slice(0, 10)
+}
+
+function formatUTCDateBR(date: Date | string | null | undefined): string {
+  if (!date) return ''
+  const str = typeof date === 'string' ? date : date.toISOString()
+  const [year, month, day] = str.slice(0, 10).split('-')
+  return `${day}/${month}/${year}`
 }
 
 function ActivityFormDialog({
