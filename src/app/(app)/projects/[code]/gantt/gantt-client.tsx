@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AllocationTable } from '@/components/gantt/allocation-table'
+import { MemberAvatar } from '@/components/members/member-card'
 import { getGanttData, type GanttData } from '@/app/actions/gantt'
 
 const GanttChart = dynamic(() => import('./gantt-chart'), {
@@ -29,19 +30,24 @@ function progressFromStatus(status: string): number {
 
 const FEATURE_COLOR_COUNT = 19
 
-function buildTasks(data: GanttData): GanttTask[] {
+function buildTasks(data: GanttData, selectedMemberIds: Set<string>): GanttTask[] {
   const result: GanttTask[] = []
   let colorIdx = 0
+  const filterActive = selectedMemberIds.size > 0
 
   for (const { feature, activities } of data.items) {
-    if (activities.length === 0) continue
+    const visibleActivities = filterActive
+      ? activities.filter((a) => a.assignedMemberId && selectedMemberIds.has(a.assignedMemberId))
+      : activities
+
+    if (visibleActivities.length === 0) { colorIdx++; continue }
 
     const featureClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}`
     const activityClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}-light`
     colorIdx++
 
-    const starts = activities.map((a) => new Date(a.startDate!).getTime())
-    const ends = activities.map((a) => new Date(a.estimatedEndDate!).getTime())
+    const starts = visibleActivities.map((a) => new Date(a.startDate!).getTime())
+    const ends = visibleActivities.map((a) => new Date(a.estimatedEndDate!).getTime())
     const minStart = new Date(Math.min(...starts))
     const maxEnd = new Date(Math.max(...ends))
 
@@ -56,7 +62,7 @@ function buildTasks(data: GanttData): GanttTask[] {
       _isFeature: true,
     })
 
-    for (const act of activities) {
+    for (const act of visibleActivities) {
       result.push({
         id: act.id,
         name: act.name,
@@ -91,8 +97,23 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
   const [viewMode, setViewMode] = useState<ViewMode>('Week')
   const [generatedTime, setGeneratedTime] = useState(generatedAt)
   const [isRefreshing, startRefresh] = useTransition()
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
 
-  const tasks = useMemo(() => buildTasks(data), [data])
+  const members = useMemo(
+    () => data.memberAllocations.map((a) => a.member),
+    [data],
+  )
+
+  function toggleMember(id: string) {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const tasks = useMemo(() => buildTasks(data, selectedMemberIds), [data, selectedMemberIds])
 
   function handleRefresh() {
     startRefresh(async () => {
@@ -111,7 +132,7 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b">
+      <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b flex-wrap">
         <div className="flex items-center gap-1">
           {viewModes.map(({ label, value }) => (
             <Button
@@ -124,6 +145,33 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
             </Button>
           ))}
         </div>
+
+        {members.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            {members.map((member) => {
+              const isSelected = selectedMemberIds.has(member.id)
+              const isFiltering = selectedMemberIds.size > 0
+              return (
+                <button
+                  key={member.id}
+                  title={member.name}
+                  onClick={() => toggleMember(member.id)}
+                  className={[
+                    'rounded-full transition-all outline-none',
+                    isSelected
+                      ? 'ring-2 ring-offset-1 ring-foreground'
+                      : isFiltering
+                        ? 'opacity-40 hover:opacity-70'
+                        : 'hover:ring-2 hover:ring-offset-1 hover:ring-muted-foreground',
+                  ].join(' ')}
+                >
+                  <MemberAvatar name={member.name} size="sm" />
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <span className="ml-auto text-xs text-muted-foreground">
           Gerado em: {formatTime(generatedTime)}
         </span>
