@@ -46,8 +46,9 @@ function buildTasks(data: GanttData, selectedMemberIds: Set<string>): GanttTask[
     const activityClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}-light`
     colorIdx++
 
-    const starts = visibleActivities.map((a) => new Date(a.startDate!).getTime())
-    const ends = visibleActivities.map((a) => new Date(a.estimatedEndDate!).getTime())
+    // Feature bar always spans ALL activities (full duration), not just the filtered ones
+    const starts = activities.map((a) => new Date(a.startDate!).getTime())
+    const ends = activities.map((a) => new Date(a.estimatedEndDate!).getTime())
     const minStart = new Date(Math.min(...starts))
     const maxEnd = new Date(Math.max(...ends))
 
