@@ -16,7 +16,7 @@ const GanttChart = dynamic(() => import('./gantt-chart'), {
   loading: () => <Skeleton className="h-full w-full rounded-none" />,
 })
 
-type ViewMode = 'Day' | 'Week' | 'Month'
+type ViewMode = 'Day' | 'Week'
 
 function toDateStr(d: Date): string {
   return d.toISOString().split('T')[0]
@@ -95,7 +95,7 @@ interface GanttClientProps {
 
 export function GanttClient({ projectId, initialData, generatedAt }: GanttClientProps) {
   const [data, setData] = useState(initialData)
-  const [viewMode, setViewMode] = useState<ViewMode>('Week')
+  const [viewMode, setViewMode] = useState<ViewMode>('Day')
   const [generatedTime, setGeneratedTime] = useState(generatedAt)
   const [isRefreshing, startRefresh] = useTransition()
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
@@ -127,7 +127,6 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
   const viewModes: { label: string; value: ViewMode }[] = [
     { label: 'Dia', value: 'Day' },
     { label: 'Semana', value: 'Week' },
-    { label: 'Mês', value: 'Month' },
   ]
 
   return (
@@ -200,6 +199,9 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
 
           {/* Allocation table — 40% */}
           <div className="flex-[2] min-h-0 overflow-auto border-t">
+            <div className="px-4 py-2 border-b bg-muted/40">
+              <h2 className="text-sm font-semibold">Ocupação do time</h2>
+            </div>
             <AllocationTable memberAllocations={data.memberAllocations} />
           </div>
         </>
