@@ -214,3 +214,28 @@ export type Calendar = typeof calendars.$inferSelect
 export type NewCalendar = typeof calendars.$inferInsert
 export type CalendarEvent = typeof calendarEvents.$inferSelect
 export type NewCalendarEvent = typeof calendarEvents.$inferInsert
+
+export const featureComments = pgTable(
+  'feature_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    featureId: uuid('feature_id')
+      .notNull()
+      .references(() => features.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    type: text('type').notNull().default('update'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('feature_comments_tenant_idx').on(t.tenantId),
+    index('feature_comments_feature_idx').on(t.featureId),
+    index('feature_comments_tenant_feature_idx').on(t.tenantId, t.featureId),
+  ],
+)
+
+export type FeatureComment = typeof featureComments.$inferSelect
+export type NewFeatureComment = typeof featureComments.$inferInsert

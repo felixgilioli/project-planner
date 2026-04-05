@@ -3,6 +3,7 @@ import { getProjectByCode } from '@/app/actions/projects'
 import { getFeatures } from '@/app/actions/features'
 import { getActivities } from '@/app/actions/activities'
 import { getMembers } from '@/app/actions/members'
+import { getComments } from '@/app/actions/feature-comments'
 import { FeaturesClient } from './features-client'
 
 interface FeaturesPageProps {
@@ -17,10 +18,11 @@ export default async function FeaturesPage({ params, searchParams }: FeaturesPag
   const project = await getProjectByCode(code)
   if (!project) redirect('/projects')
 
-  const [features, activities, members] = await Promise.all([
+  const [features, activities, members, comments] = await Promise.all([
     getFeatures(project.id),
     selectedFeatureId ? getActivities(selectedFeatureId) : Promise.resolve([]),
     getMembers(project.id),
+    selectedFeatureId ? getComments(selectedFeatureId) : Promise.resolve([]),
   ])
 
   return (
@@ -31,6 +33,7 @@ export default async function FeaturesPage({ params, searchParams }: FeaturesPag
       selectedFeatureId={selectedFeatureId}
       activities={activities}
       members={members}
+      comments={comments}
     />
   )
 }

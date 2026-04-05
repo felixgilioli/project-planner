@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Check, Loader2, Pencil } from 'lucide-react'
+import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -26,10 +26,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/shared/empty-state'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { createFeature, updateFeature, deleteFeature } from '@/app/actions/features'
 import { createActivity, updateActivity, deleteActivity } from '@/app/actions/activities'
+import { createComment, deleteComment } from '@/app/actions/feature-comments'
 import { MemberAvatar } from '@/components/members/member-card'
-import type { Feature, Activity, TeamMember } from '@/lib/db/schema'
+import type { Feature, Activity, TeamMember, FeatureComment } from '@/lib/db/schema'
 
 // ─── Config maps ────────────────────────────────────────────────────────────
 
@@ -63,6 +70,7 @@ interface FeaturesClientProps {
   selectedFeatureId?: string
   activities: Activity[]
   members: TeamMember[]
+  comments: FeatureComment[]
 }
 
 export function FeaturesClient({
@@ -72,6 +80,7 @@ export function FeaturesClient({
   selectedFeatureId,
   activities,
   members,
+  comments,
 }: FeaturesClientProps) {
   const router = useRouter()
   const selectedFeature = features.find((f) => f.id === selectedFeatureId) ?? null
@@ -124,6 +133,7 @@ export function FeaturesClient({
             projectId={projectId}
             projectCode={projectCode}
             members={members}
+            comments={comments}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center h-full">
@@ -188,12 +198,14 @@ function FeatureDetail({
   projectId,
   projectCode,
   members,
+  comments,
 }: {
   feature: Feature
   activities: Activity[]
   projectId: string
   projectCode: string
   members: TeamMember[]
+  comments: FeatureComment[]
 }) {
   const router = useRouter()
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -571,6 +583,12 @@ function FeatureDetail({
           members={members}
           activity={editingActivity}
         />
+
+        {/* Updates section */}
+        <div className="mt-8 border-t pt-6">
+          <h3 className="font-semibold mb-4">Atualizações</h3>
+          <DiarySection featureId={feature.id} comments={comments} />
+        </div>
       </div>
 
       {/* Delete feature dialog */}
@@ -791,6 +809,178 @@ function ActivityFormDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── Diary section ───────────────────────────────────────────────────────────
+
+const COMMENT_TYPE_CONFIG = {
+  update: { label: 'Atualização', dot: 'bg-blue-500', text: 'text-blue-600' },
+  impediment: { label: 'Impedimento', dot: 'bg-red-500', text: 'text-red-600' },
+  requirement_change: { label: 'Mudança de requisito', dot: 'bg-amber-400', text: 'text-amber-600' },
+} as const
+
+function commentTypeConfig(type: string) {
+  return COMMENT_TYPE_CONFIG[type as keyof typeof COMMENT_TYPE_CONFIG] ?? COMMENT_TYPE_CONFIG.update
+}
+
+function formatCommentDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const now = new Date()
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (isToday) return `hoje às ${time}`
+
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')
+  return `${day} ${month} às ${time}`
+}
+
+function DiarySection({
+  featureId,
+  comments,
+}: {
+  featureId: string
+  comments: FeatureComment[]
+}) {
+  const [content, setContent] = useState('')
+  const [type, setType] = useState('update')
+  const [isPending, setIsPending] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!content.trim()) return
+    setIsPending(true)
+    try {
+      await createComment(featureId, { content, type })
+      setContent('')
+      toast.success('Registro adicionado.')
+    } catch {
+      toast.error('Erro ao registrar.')
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setDeletingId(id)
+    try {
+      await deleteComment(id)
+      toast.success('Registro removido.')
+    } catch {
+      toast.error('Erro ao remover registro.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div>
+      {/* New comment form */}
+      <form onSubmit={handleSubmit} className="space-y-2 mb-6">
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 text-sm font-normal"
+              >
+                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', commentTypeConfig(type).dot)} />
+                {commentTypeConfig(type).label}
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-0.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {Object.entries(COMMENT_TYPE_CONFIG).map(([value, cfg]) => (
+                <DropdownMenuItem
+                  key={value}
+                  onSelect={() => setType(value)}
+                  className="gap-2"
+                >
+                  <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', cfg.dot)} />
+                  {cfg.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Descreva a atualização, impedimento ou mudança…"
+          maxLength={1000}
+          className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] resize-none"
+        />
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">{content.length}/1000</span>
+          <Button type="submit" size="sm" disabled={isPending || !content.trim()}>
+            {isPending && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+            Registrar
+          </Button>
+        </div>
+      </form>
+
+      {/* Timeline */}
+      {comments.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">
+          Nenhum registro ainda. Use este diário para anotar atualizações e impedimentos.
+        </p>
+      ) : (
+        <div className="relative">
+          {/* Vertical line */}
+          <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
+
+          <div className="space-y-4 pl-8">
+            {comments.map((comment) => {
+              const cfg = commentTypeConfig(comment.type)
+              const isDeleting = deletingId === comment.id
+              return (
+                <div key={comment.id} className="relative group">
+                  {/* Dot */}
+                  <div
+                    className={cn(
+                      'absolute -left-6 top-1 w-3 h-3 rounded-full border-2 border-background',
+                      cfg.dot,
+                    )}
+                  />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={cn('text-xs font-medium', cfg.text)}>{cfg.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatCommentDate(comment.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap break-words">{comment.content}</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
+                      onClick={() => handleDelete(comment.id)}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
