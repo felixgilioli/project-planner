@@ -65,6 +65,8 @@ function statusConfig(s: string) {
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
+type ActivityProgressEntry = { featureId: string; progress: number; estimatedHours: string }
+
 interface FeaturesClientProps {
   projectId: string
   projectCode: string
@@ -73,6 +75,7 @@ interface FeaturesClientProps {
   activities: Activity[]
   members: TeamMember[]
   comments: FeatureComment[]
+  allActivitiesProgress: ActivityProgressEntry[]
 }
 
 export function FeaturesClient({
@@ -83,10 +86,32 @@ export function FeaturesClient({
   activities,
   members,
   comments,
+  allActivitiesProgress,
 }: FeaturesClientProps) {
   const router = useRouter()
   const selectedFeature = features.find((f) => f.id === selectedFeatureId) ?? null
   const [createOpen, setCreateOpen] = useState(false)
+
+  const featureProgressMap = useMemo(() => {
+    const map = new Map<string, number>()
+    const grouped = new Map<string, ActivityProgressEntry[]>()
+    for (const a of allActivitiesProgress) {
+      const list = grouped.get(a.featureId) ?? []
+      list.push(a)
+      grouped.set(a.featureId, list)
+    }
+    for (const [featureId, acts] of grouped) {
+      let totalWeight = 0
+      let weightedSum = 0
+      for (const a of acts) {
+        const w = parseFloat(a.estimatedHours ?? '0') || 1
+        weightedSum += a.progress * w
+        totalWeight += w
+      }
+      map.set(featureId, Math.round(weightedSum / totalWeight))
+    }
+    return map
+  }, [allActivitiesProgress])
 
   function selectFeature(id: string) {
     router.push(`/projects/${projectCode}/features?feature=${id}`)
@@ -118,6 +143,7 @@ export function FeaturesClient({
                   key={feature.id}
                   feature={feature}
                   isSelected={feature.id === selectedFeatureId}
+                  progressPercent={featureProgressMap.get(feature.id) ?? 0}
                   onClick={() => selectFeature(feature.id)}
                 />
               ))}
@@ -163,10 +189,12 @@ export function FeaturesClient({
 const FeatureListItem = memo(function FeatureListItem({
   feature,
   isSelected,
+  progressPercent,
   onClick,
 }: {
   feature: Feature
   isSelected: boolean
+  progressPercent: number
   onClick: () => void
 }) {
   const pCfg = priorityConfig(feature.priority)
@@ -193,8 +221,14 @@ const FeatureListItem = memo(function FeatureListItem({
           </Badge>
         )}
       </div>
-      <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
-        <div className="h-full bg-indigo-500 rounded-full" style={{ width: '0%' }} />
+      <div className="mt-2 flex items-center gap-2">
+        <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', progressPercent === 100 ? 'bg-green-500' : 'bg-indigo-500')}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{progressPercent}%</span>
       </div>
     </div>
   )

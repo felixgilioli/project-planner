@@ -245,6 +245,20 @@ export async function getActivities(featureId: string) {
     .orderBy(asc(activities.displayOrder), asc(activities.createdAt))
 }
 
+export async function getProjectActivitiesProgress(projectId: string) {
+  const tenantId = await getAuthenticatedTenantId()
+
+  return db
+    .select({
+      featureId: activities.featureId,
+      progress: activities.progress,
+      estimatedHours: activities.estimatedHours,
+    })
+    .from(activities)
+    .innerJoin(features, eq(activities.featureId, features.id))
+    .where(and(eq(features.projectId, projectId), eq(activities.tenantId, tenantId)))
+}
+
 export async function createActivity(
   featureId: string,
   data: {

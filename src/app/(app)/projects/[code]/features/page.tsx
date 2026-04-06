@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getProjectByCode } from '@/app/actions/projects'
 import { getFeatures } from '@/app/actions/features'
-import { getActivities } from '@/app/actions/activities'
+import { getActivities, getProjectActivitiesProgress } from '@/app/actions/activities'
 import { getMembers } from '@/app/actions/members'
 import { getComments } from '@/app/actions/feature-comments'
 import { FeaturesClient } from './features-client'
@@ -18,11 +18,12 @@ export default async function FeaturesPage({ params, searchParams }: FeaturesPag
   const project = await getProjectByCode(code)
   if (!project) redirect('/projects')
 
-  const [features, activities, members, comments] = await Promise.all([
+  const [features, activities, members, comments, allActivitiesProgress] = await Promise.all([
     getFeatures(project.id),
     selectedFeatureId ? getActivities(selectedFeatureId) : Promise.resolve([]),
     getMembers(project.id),
     selectedFeatureId ? getComments(selectedFeatureId) : Promise.resolve([]),
+    getProjectActivitiesProgress(project.id),
   ])
 
   return (
@@ -34,6 +35,7 @@ export default async function FeaturesPage({ params, searchParams }: FeaturesPag
       activities={activities}
       members={members}
       comments={comments}
+      allActivitiesProgress={allActivitiesProgress}
     />
   )
 }
