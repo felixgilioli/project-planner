@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -217,6 +217,14 @@ function FeatureDetail({
   // Pre-compute lookup maps to avoid O(n) find() inside render loops
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
   const activitiesById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities])
+
+  const featureEndDate = useMemo(() => {
+    const dates = activities
+      .map((a) => a.estimatedEndDate)
+      .filter((d): d is Date => d != null)
+    if (dates.length === 0) return null
+    return dates.reduce((max, d) => (d > max ? d : max))
+  }, [activities])
 
 
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
@@ -545,6 +553,13 @@ function FeatureDetail({
             </p>
           )}
         </div>
+
+        {featureEndDate && (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <span>Entrega estimada: <span className="font-medium text-foreground">{formatUTCDateBR(featureEndDate)}</span></span>
+          </div>
+        )}
       </div>
 
       {/* Activities section */}
