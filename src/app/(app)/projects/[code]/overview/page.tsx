@@ -25,11 +25,16 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
   blocked: 'destructive',
 }
 
-const COMMENT_TYPE_LABEL: Record<string, string> = {
-  update: 'Atualização',
-  impediment: 'Impedimento',
-  decision: 'Decisão',
-  note: 'Nota',
+const COMMENT_TYPE_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
+  update: { label: 'Atualização', dot: 'bg-blue-500', text: 'text-blue-600' },
+  impediment: { label: 'Impedimento', dot: 'bg-red-500', text: 'text-red-600' },
+  requirement_change: { label: 'Mudança de requisito', dot: 'bg-amber-400', text: 'text-amber-600' },
+  decision: { label: 'Decisão', dot: 'bg-purple-500', text: 'text-purple-600' },
+  note: { label: 'Nota', dot: 'bg-gray-400', text: 'text-gray-600' },
+}
+
+function commentTypeConfig(type: string) {
+  return COMMENT_TYPE_CONFIG[type] ?? COMMENT_TYPE_CONFIG.update
 }
 
 function formatDate(date: Date | null) {
@@ -248,7 +253,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
         {/* Recent diary entries */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Últimos Registros do Diário</CardTitle>
+            <CardTitle className="text-base">Últimos Registros</CardTitle>
           </CardHeader>
           <CardContent>
             {recentComments.length === 0 ? (
@@ -258,22 +263,24 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
               />
             ) : (
               <ul className="space-y-4">
-                {recentComments.map((comment) => (
-                  <li key={comment.id} className="text-sm">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">
-                        {COMMENT_TYPE_LABEL[comment.type] ?? comment.type}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {comment.featureName}
-                      </span>
-                      <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                        {formatDate(comment.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground line-clamp-2">{comment.content}</p>
-                  </li>
-                ))}
+                {recentComments.map((comment) => {
+                  const cfg = commentTypeConfig(comment.type)
+                  return (
+                    <li key={comment.id} className="text-sm">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
+                        <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+                        <span className="text-xs text-muted-foreground truncate">
+                          {comment.featureName}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                          {formatDate(comment.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground line-clamp-2">{comment.content}</p>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </CardContent>
