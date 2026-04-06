@@ -5,6 +5,7 @@ export const featureSchema = z.object({
   description: z.string().optional(),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   status: z.enum(['backlog', 'in_progress', 'done', 'blocked']).optional(),
+  dependsOnId: z.string().uuid().nullable().optional(),
 })
 
 export const updateFeatureSchema = featureSchema.partial().extend({

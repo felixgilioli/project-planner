@@ -80,6 +80,7 @@ export const features = pgTable(
     status: text('status').notNull().default('backlog'),
     priority: text('priority').notNull().default('medium'),
     displayOrder: integer('display_order').notNull().default(0),
+    dependsOnId: uuid('depends_on_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

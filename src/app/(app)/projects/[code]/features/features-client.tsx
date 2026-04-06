@@ -134,6 +134,7 @@ export function FeaturesClient({
             projectCode={projectCode}
             members={members}
             comments={comments}
+            allFeatures={features}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center h-full">
@@ -149,6 +150,7 @@ export function FeaturesClient({
         projectId={projectId}
         open={createOpen}
         onOpenChange={setCreateOpen}
+        existingFeatures={features}
       />
     </div>
   )
@@ -199,6 +201,7 @@ function FeatureDetail({
   projectCode,
   members,
   comments,
+  allFeatures,
 }: {
   feature: Feature
   activities: Activity[]
@@ -206,6 +209,7 @@ function FeatureDetail({
   projectCode: string
   members: TeamMember[]
   comments: FeatureComment[]
+  allFeatures: Feature[]
 }) {
   const router = useRouter()
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -219,7 +223,7 @@ function FeatureDetail({
 
   const [editingName, setEditingName] = useState(false)
   const [editingDescription, setEditingDescription] = useState(false)
-  const [editingField, setEditingField] = useState<'status' | 'priority' | null>(null)
+  const [editingField, setEditingField] = useState<'status' | 'priority' | 'dependsOn' | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [activityModalOpen, setActivityModalOpen] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
@@ -228,6 +232,7 @@ function FeatureDetail({
   const [isSavingDescription, setIsSavingDescription] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isUpdatingPriority, setIsUpdatingPriority] = useState(false)
+  const [isUpdatingDependsOn, setIsUpdatingDependsOn] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null)
 
@@ -299,6 +304,19 @@ function FeatureDetail({
       toast.error('Erro ao atualizar prioridade.')
     } finally {
       setIsUpdatingPriority(false)
+    }
+  }
+
+  async function handleUpdateDependsOn(dependsOnId: string | null) {
+    setEditingField(null)
+    setIsUpdatingDependsOn(true)
+    try {
+      await updateFeature(feature.id, { dependsOnId })
+      toast.success('Dependência atualizada.')
+    } catch {
+      toast.error('Erro ao atualizar dependência.')
+    } finally {
+      setIsUpdatingDependsOn(false)
     }
   }
 
@@ -435,6 +453,42 @@ function FeatureDetail({
               title="Clique para editar"
             >
               {isUpdatingPriority ? <Loader2 className="h-3 w-3 animate-spin" /> : pCfg.label}
+            </Badge>
+          )}
+
+          {editingField === 'dependsOn' ? (
+            <select
+              autoFocus
+              defaultValue={feature.dependsOnId ?? ''}
+              className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none max-w-[200px]"
+              onChange={(e) => handleUpdateDependsOn(e.target.value || null)}
+              onBlur={() => setEditingField(null)}
+            >
+              <option value="">Sem dependência</option>
+              {allFeatures
+                .filter((f) => f.id !== feature.id)
+                .map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+            </select>
+          ) : (
+            <Badge
+              className={cn(
+                'cursor-pointer border-0 max-w-[200px] truncate',
+                feature.dependsOnId
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+              )}
+              onClick={() => setEditingField('dependsOn')}
+              title={feature.dependsOnId ? `Depende de: ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? ''}` : 'Clique para definir dependência'}
+            >
+              {isUpdatingDependsOn ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : feature.dependsOnId ? (
+                `↳ ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? '…'}`
+              ) : (
+                'Sem dependência'
+              )}
             </Badge>
           )}
         </div>
@@ -990,14 +1044,17 @@ function CreateFeatureDialog({
   projectId,
   open,
   onOpenChange,
+  existingFeatures,
 }: {
   projectId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  existingFeatures: Feature[]
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [dependsOnId, setDependsOnId] = useState('')
   const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
@@ -1005,6 +1062,7 @@ function CreateFeatureDialog({
       setName('')
       setDescription('')
       setPriority('medium')
+      setDependsOnId('')
     }
   }, [open])
 
@@ -1018,6 +1076,7 @@ function CreateFeatureDialog({
         name: name.trim(),
         description: description.trim() || undefined,
         priority,
+        dependsOnId: dependsOnId || undefined,
       })
       toast.success('Feature criada.')
       onOpenChange(false)
@@ -1068,6 +1127,22 @@ function CreateFeatureDialog({
               ))}
             </select>
           </div>
+          {existingFeatures.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="feature-depends-on">Depende de</Label>
+              <select
+                id="feature-depends-on"
+                value={dependsOnId}
+                onChange={(e) => setDependsOnId(e.target.value)}
+                className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Sem dependência</option>
+                {existingFeatures.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"

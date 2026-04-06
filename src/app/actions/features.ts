@@ -27,7 +27,7 @@ export async function getFeatures(projectId: string) {
 
 export async function createFeature(
   projectId: string,
-  data: { name: string; description?: string; priority?: string; status?: string }
+  data: { name: string; description?: string; priority?: string; status?: string; dependsOnId?: string | null }
 ) {
   featureSchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
@@ -47,6 +47,7 @@ export async function createFeature(
     description: data.description ?? null,
     priority: data.priority ?? 'medium',
     status: data.status ?? 'backlog',
+    dependsOnId: data.dependsOnId ?? null,
   })
 
   revalidatePath(`/projects/${projectId}/features`)
@@ -60,9 +61,15 @@ export async function updateFeature(
     priority?: string
     status?: string
     displayOrder?: number
+    dependsOnId?: string | null
   }
 ) {
   updateFeatureSchema.parse(data)
+
+  if (data.dependsOnId !== undefined && data.dependsOnId !== null && data.dependsOnId === id) {
+    throw new Error('Feature não pode depender de si mesma')
+  }
+
   const tenantId = await getAuthenticatedTenantId()
 
   const [feature] = await db
