@@ -110,16 +110,20 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Entrega Estimada
+              Próxima Entrega
             </CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-lg font-bold leading-tight">
-              {metrics.deliveryDate ? formatDate(metrics.deliveryDate) : '—'}
+              {upcomingDeliveries[0] ? formatDate(upcomingDeliveries[0].estimatedEndDate) : '—'}
             </p>
-            {!metrics.deliveryDate && (
-              <p className="text-xs text-muted-foreground mt-1">Sem atividades planejadas</p>
+            {upcomingDeliveries[0] ? (
+              <p className="text-xs text-muted-foreground mt-1 truncate">
+                {upcomingDeliveries[0].name}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">Sem entregas planejadas</p>
             )}
           </CardContent>
         </Card>
