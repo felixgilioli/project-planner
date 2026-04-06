@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { List, Users, Calendar, BarChart2, ChevronLeft, Settings, Moon, Sun } from 'lucide-react'
+import { List, Users, Calendar, BarChart2, ChevronLeft, Settings, Moon, Sun, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,6 +35,7 @@ export function ProjectSidebar({ project, userName }: ProjectSidebarProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
   const navItems = [
+    { href: `/projects/${project.code}/overview`, icon: LayoutDashboard, label: 'Overview' },
     { href: `/projects/${project.code}/features`, icon: List, label: 'Features' },
     { href: `/projects/${project.code}/members`, icon: Users, label: 'Membros' },
     { href: `/projects/${project.code}/calendar`, icon: Calendar, label: 'Calendário' },
