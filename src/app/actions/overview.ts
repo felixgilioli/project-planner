@@ -85,12 +85,21 @@ export async function getOverviewData(projectId: string) {
       : Promise.resolve([]),
   ])
 
+  function calcWeightedProgress(acts: typeof projectActivities): number {
+    if (acts.length === 0) return 0
+    let totalWeight = 0
+    let weightedSum = 0
+    for (const a of acts) {
+      const w = parseFloat(a.estimatedHours ?? '0') || 1
+      weightedSum += a.progress * w
+      totalWeight += w
+    }
+    return Math.round(weightedSum / totalWeight)
+  }
+
   // Metrics
   const totalFeatures = projectFeatures.length
-  const totalActivities = projectActivities.length
-  const doneActivities = projectActivities.filter((a) => a.status === 'done').length
-  const overallProgress =
-    totalActivities > 0 ? Math.round((doneActivities / totalActivities) * 100) : 0
+  const overallProgress = calcWeightedProgress(projectActivities)
 
   const deliveryDate = projectFeatures
     .map((f) => f.estimatedEndDate)
@@ -121,7 +130,7 @@ export async function getOverviewData(projectId: string) {
       feature,
       totalActivities: acts.length,
       doneActivities: done,
-      progressPercent: acts.length > 0 ? Math.round((done / acts.length) * 100) : 0,
+      progressPercent: calcWeightedProgress(acts),
     }
   })
 

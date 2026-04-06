@@ -44,6 +44,7 @@ export async function getDailyData(projectId: string): Promise<MemberWithActivit
       assignedMemberId: activities.assignedMemberId,
       estimatedEndDate: activities.estimatedEndDate,
       status: activities.status,
+      progress: activities.progress,
       displayOrder: activities.displayOrder,
       createdAt: activities.createdAt,
       updatedAt: activities.updatedAt,

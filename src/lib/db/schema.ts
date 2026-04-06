@@ -137,6 +137,7 @@ export const activities = pgTable(
     assignedMemberId: uuid('assigned_member_id').references(() => teamMembers.id, { onDelete: 'set null' }),
     estimatedEndDate: timestamp('estimated_end_date'),
     status: text('status').notNull().default('backlog'),
+    progress: integer('progress').notNull().default(0),
     displayOrder: integer('display_order').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

@@ -10,6 +10,8 @@ import { updateActivity, confirmActivityUpdate } from '@/app/actions/activities'
 import type { Project } from '@/lib/db/schema'
 import type { MemberWithActivities, ActivityWithFeature } from '@/app/actions/daily'
 
+// ActivityWithFeature now includes the `progress` field from the updated select
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getInitials(name: string) {
@@ -93,6 +95,7 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
     initialData[0]?.activities[0]?.id ?? null,
   )
   const [commentText, setCommentText] = useState('')
+  const [newProgress, setNewProgress] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const formattedDate = formatLongDate(new Date())
@@ -111,6 +114,12 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
     setSelectedMemberId(memberId)
     const memberData = data.find((d) => d.member.id === memberId)
     setSelectedActivityId(memberData?.activities[0]?.id ?? null)
+    setNewProgress(null)
+  }
+
+  function handleSelectActivity(activityId: string | null) {
+    setSelectedActivityId(activityId)
+    setNewProgress(null)
   }
 
   function getPlaceholder(type: CommentType, memberName: string): string {
@@ -145,19 +154,50 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
     }
   }
 
+  const currentProgress = (selectedActivity as (ActivityWithFeature & { progress?: number }) | null)?.progress ?? 0
+  const progressChanged = newProgress !== null && newProgress !== currentProgress
+  const isCommentRequired = commentType === 'impediment' || commentType === 'requirement_change'
+  const canSubmit = selectedActivity && (commentText.trim() || progressChanged) &&
+    (!isCommentRequired || commentText.trim())
+
   async function handleSubmit() {
-    if (!selectedActivity || !commentText.trim() || !selectedMemberId) return
+    if (!selectedActivity || !selectedMemberId || !canSubmit) return
     setIsSubmitting(true)
     try {
-      await createComment(selectedActivity.featureId, {
-        content: commentText.trim(),
-        type: commentType,
-      })
+      const ops: Promise<unknown>[] = []
+
+      if (progressChanged && newProgress !== null) {
+        ops.push(updateActivity(selectedActivity.id, { progress: newProgress }))
+      }
+
+      if (commentText.trim()) {
+        ops.push(createComment(selectedActivity.featureId, {
+          content: commentText.trim(),
+          type: commentType,
+        }))
+      }
+
+      await Promise.all(ops)
+
+      if (progressChanged && newProgress !== null) {
+        setData((prev) =>
+          prev.map((memberData) => ({
+            ...memberData,
+            activities: memberData.activities.map((act) =>
+              act.id === selectedActivity.id
+                ? { ...act, progress: newProgress, status: newProgress === 0 ? 'backlog' : newProgress === 100 ? 'done' : 'in_progress' }
+                : act,
+            ),
+          })),
+        )
+      }
+
       setCommentText('')
+      setNewProgress(null)
       setAttendedIds((prev) => new Set([...prev, selectedMemberId]))
       toast.success('Registro salvo.')
     } catch {
-      toast.error('Erro ao registrar comentário.')
+      toast.error('Erro ao registrar.')
     } finally {
       setIsSubmitting(false)
     }
@@ -273,12 +313,12 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
               ))}
             </div>
 
-            {/* Activity select + feature label */}
+            {/* Activity select + feature label + progress slider */}
             {selectedMemberData.activities.length > 0 && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <select
                   value={selectedActivityId ?? ''}
-                  onChange={(e) => setSelectedActivityId(e.target.value || null)}
+                  onChange={(e) => handleSelectActivity(e.target.value || null)}
                   className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {selectedMemberData.activities.map((act) => (
@@ -295,6 +335,32 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
                     </span>
                   </p>
                 )}
+                {selectedActivity && (
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-xs text-muted-foreground">
+                      Progresso atual: <span className="font-medium text-foreground">{currentProgress}%</span>
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={newProgress ?? currentProgress}
+                        onChange={(e) => setNewProgress(Number(e.target.value))}
+                        className="flex-1 h-2 accent-indigo-500"
+                      />
+                      <span className="text-xs font-medium tabular-nums w-8 text-right">
+                        {newProgress ?? currentProgress}%
+                      </span>
+                    </div>
+                    {progressChanged && newProgress !== null && newProgress < currentProgress && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        O progresso vai diminuir de {currentProgress}% para {newProgress}%
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -310,11 +376,16 @@ export function DailyClient({ project, initialData }: DailyClientProps) {
               rows={3}
               className="w-full text-sm border rounded-md px-3 py-2 bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
             />
+            {isCommentRequired && !commentText.trim() && (
+              <p className="text-xs text-muted-foreground -mt-1">
+                Comentário obrigatório para este tipo de registro.
+              </p>
+            )}
 
             <div className="flex justify-end">
               <Button
                 onClick={handleSubmit}
-                disabled={isSubmitting || !commentText.trim() || !selectedActivity}
+                disabled={isSubmitting || !canSubmit}
               >
                 {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Registrar

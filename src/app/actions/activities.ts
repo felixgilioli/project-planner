@@ -288,6 +288,12 @@ export async function createActivity(
   revalidatePath(`/projects/${feature.projectId}/features`)
 }
 
+function progressToStatus(progress: number): string {
+  if (progress === 0) return 'backlog'
+  if (progress === 100) return 'done'
+  return 'in_progress'
+}
+
 export async function updateActivity(
   id: string,
   data: {
@@ -297,11 +303,17 @@ export async function updateActivity(
     estimatedHours?: number
     assignedMemberId?: string | null
     status?: string
+    progress?: number
     displayOrder?: number
   }
 ): Promise<{ requiresConfirmation: false } | { requiresConfirmation: true; cascadeResult: CascadeResult }> {
   updateActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
+
+  // Derive status from progress when progress is provided
+  if (data.progress !== undefined && data.status === undefined) {
+    data = { ...data, status: progressToStatus(data.progress) }
+  }
 
   const [activity] = await db
     .select({
@@ -339,12 +351,13 @@ export async function updateActivity(
     effectiveMemberId,
   )
 
-  const { estimatedHours, ...rest } = data
+  const { estimatedHours, progress, ...rest } = data
   await db
     .update(activities)
     .set({
       ...rest,
       ...(estimatedHours !== undefined ? { estimatedHours: String(estimatedHours) } : {}),
+      ...(progress !== undefined ? { progress } : {}),
       estimatedEndDate,
       updatedAt: new Date(),
     })
@@ -364,11 +377,16 @@ export async function confirmActivityUpdate(
     estimatedHours?: number
     assignedMemberId?: string | null
     status?: string
+    progress?: number
     displayOrder?: number
   },
 ): Promise<{ impactedCount: number }> {
   updateActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
+
+  if (data.progress !== undefined && data.status === undefined) {
+    data = { ...data, status: progressToStatus(data.progress) }
+  }
 
   const [activity] = await db
     .select({

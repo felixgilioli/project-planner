@@ -634,7 +634,18 @@ function FeatureDetail({
                   key={activity.id}
                   className="flex items-center gap-3 p-2 rounded-md hover:bg-muted group"
                 >
-                  <span className="text-sm flex-1 truncate">{activity.name}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm truncate block">{activity.name}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', activity.progress === 100 ? 'bg-green-500' : 'bg-indigo-500')}
+                          style={{ width: `${activity.progress ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">{activity.progress ?? 0}%</span>
+                    </div>
+                  </div>
                   {dependsOn && (
                     <span className="text-xs text-muted-foreground shrink-0" title={`Depende de: ${dependsOn.name}`}>
                       ↳ {dependsOn.name}

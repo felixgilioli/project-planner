@@ -10,6 +10,7 @@ export const createActivitySchema = z.object({
 
 export const updateActivitySchema = createActivitySchema.partial().extend({
   status: z.enum(['backlog', 'in_progress', 'done', 'blocked']).optional(),
+  progress: z.number().int().min(0).max(100).optional(),
   displayOrder: z.number().int().optional(),
 })
 

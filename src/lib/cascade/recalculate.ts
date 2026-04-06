@@ -65,6 +65,7 @@ type UpdateActivityData = {
   estimatedHours?: number
   assignedMemberId?: string | null
   status?: string
+  progress?: number
   displayOrder?: number
 }
 
@@ -501,12 +502,13 @@ export async function applyCascade(
 
   await db.transaction(async (tx) => {
     // 1. Apply the edited activity's new values
-    const { estimatedHours, ...rest } = newData
+    const { estimatedHours, progress, ...rest } = newData
     await tx
       .update(activities)
       .set({
         ...rest,
         ...(estimatedHours !== undefined ? { estimatedHours: String(estimatedHours) } : {}),
+        ...(progress !== undefined ? { progress } : {}),
         estimatedEndDate,
         updatedAt: new Date(),
       })
