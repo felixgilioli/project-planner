@@ -18,9 +18,9 @@ function weekKeyToLabel(key: string): string {
 function cellColor(hours: number, capacity: number): string {
   if (hours === 0) return ''
   const pct = hours / capacity
-  if (pct < 0.8) return 'bg-[#D1FAE5]'
-  if (pct <= 1.0) return 'bg-[#FEF3C7]'
-  return 'bg-[#FEE2E2]'
+  if (pct < 0.8) return 'bg-[#D1FAE5] text-gray-900 dark:bg-emerald-900/40 dark:text-emerald-200'
+  if (pct <= 1.0) return 'bg-[#FEF3C7] text-gray-900 dark:bg-amber-900/40 dark:text-amber-200'
+  return 'bg-[#FEE2E2] text-gray-900 dark:bg-red-900/40 dark:text-red-200'
 }
 
 interface AllocationTableProps {

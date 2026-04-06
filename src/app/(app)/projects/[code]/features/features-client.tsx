@@ -43,17 +43,17 @@ import type { Feature, Activity, TeamMember, FeatureComment } from '@/lib/db/sch
 // ─── Config maps ────────────────────────────────────────────────────────────
 
 const PRIORITY_CONFIG = {
-  critical: { label: 'Crítica', className: 'bg-red-100 text-red-800 border-0' },
-  high: { label: 'Alta', className: 'bg-amber-100 text-amber-800 border-0' },
-  medium: { label: 'Média', className: 'bg-blue-100 text-blue-800 border-0' },
-  low: { label: 'Baixa', className: 'bg-gray-100 text-gray-600 border-0' },
+  critical: { label: 'Crítica', className: 'bg-red-100 text-red-800 border-0 dark:bg-red-900/30 dark:text-red-300' },
+  high: { label: 'Alta', className: 'bg-amber-100 text-amber-800 border-0 dark:bg-amber-900/30 dark:text-amber-300' },
+  medium: { label: 'Média', className: 'bg-blue-100 text-blue-800 border-0 dark:bg-blue-900/30 dark:text-blue-300' },
+  low: { label: 'Baixa', className: 'bg-gray-100 text-gray-600 border-0 dark:bg-gray-800 dark:text-gray-400' },
 } as const
 
 const STATUS_CONFIG = {
-  backlog: { label: 'Backlog', className: 'bg-gray-100 text-gray-600 border-0' },
-  in_progress: { label: 'Em progresso', className: 'bg-blue-100 text-blue-800 border-0' },
-  done: { label: 'Concluída', className: 'bg-emerald-100 text-emerald-800 border-0' },
-  blocked: { label: 'Bloqueada', className: 'bg-red-100 text-red-800 border-0' },
+  backlog: { label: 'Backlog', className: 'bg-gray-100 text-gray-600 border-0 dark:bg-gray-800 dark:text-gray-400' },
+  in_progress: { label: 'Em progresso', className: 'bg-blue-100 text-blue-800 border-0 dark:bg-blue-900/30 dark:text-blue-300' },
+  done: { label: 'Concluída', className: 'bg-emerald-100 text-emerald-800 border-0 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  blocked: { label: 'Bloqueada', className: 'bg-red-100 text-red-800 border-0 dark:bg-red-900/30 dark:text-red-300' },
 } as const
 
 function priorityConfig(p: string) {
@@ -215,7 +215,7 @@ const FeatureListItem = memo(function FeatureListItem({
         <Badge className={cn('text-xs', pCfg.className)}>{pCfg.label}</Badge>
         <Badge className={cn('text-xs', sCfg.className)}>{sCfg.label}</Badge>
         {feature.isBlocked && (
-          <Badge className="text-xs bg-red-100 text-red-800 border-0 gap-1">
+          <Badge className="text-xs bg-red-100 text-red-800 border-0 gap-1 dark:bg-red-900/30 dark:text-red-300">
             <Lock className="h-2.5 w-2.5" />
             Bloqueada
           </Badge>
@@ -562,8 +562,8 @@ function FeatureDetail({
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer border-0',
               feature.isBlocked
-                ? 'bg-red-100 text-red-800'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
             )}
             title={feature.isBlocked ? 'Clique para desbloquear' : 'Clique para bloquear'}
           >
