@@ -20,6 +20,34 @@ import {
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
 
+async function syncFeatureStatus(featureId: string, tenantId: string): Promise<void> {
+  const [featureRow, acts] = await Promise.all([
+    db
+      .select({ status: features.status })
+      .from(features)
+      .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+      .limit(1),
+    db
+      .select({ status: activities.status })
+      .from(activities)
+      .where(and(eq(activities.featureId, featureId), eq(activities.tenantId, tenantId))),
+  ])
+
+  if (!featureRow[0] || featureRow[0].status === 'blocked' || acts.length === 0) return
+
+  const allDone = acts.every((a) => a.status === 'done')
+  const anyActive = acts.some((a) => a.status === 'in_progress' || a.status === 'done')
+
+  const newStatus = allDone ? 'done' : anyActive ? 'in_progress' : 'backlog'
+
+  if (newStatus !== featureRow[0].status) {
+    await db
+      .update(features)
+      .set({ status: newStatus, updatedAt: new Date() })
+      .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+  }
+}
+
 async function syncFeatureDates(featureId: string, tenantId: string): Promise<void> {
   const acts = await db
     .select({ startDate: activities.startDate, estimatedEndDate: activities.estimatedEndDate })
@@ -298,7 +326,7 @@ export async function createActivity(
     estimatedEndDate,
   })
 
-  await syncFeatureDates(featureId, tenantId)
+  await Promise.all([syncFeatureDates(featureId, tenantId), syncFeatureStatus(featureId, tenantId)])
   revalidatePath(`/projects/${feature.projectId}/features`)
 }
 
@@ -377,7 +405,7 @@ export async function updateActivity(
     })
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
-  await syncFeatureDates(activity.featureId, tenantId)
+  await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
   revalidatePath(`/projects/${activity.projectId}/features`)
   return { requiresConfirmation: false }
 }
@@ -418,7 +446,7 @@ export async function confirmActivityUpdate(
   const cascadeResult = await calculateCascadeImpact(activityId, data, tenantId)
 
   await applyCascade(activityId, data, cascadeResult, tenantId)
-  await syncFeatureDates(activity.featureId, tenantId)
+  await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
   revalidatePath(`/projects/${activity.projectId}/features`)
   return { impactedCount: cascadeResult.impactedItems.length }
 }
@@ -442,6 +470,6 @@ export async function deleteActivity(id: string) {
     .delete(activities)
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
-  await syncFeatureDates(activity.featureId, tenantId)
+  await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
   revalidatePath(`/projects/${activity.projectId}/features`)
 }
