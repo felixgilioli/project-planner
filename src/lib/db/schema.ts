@@ -11,6 +11,7 @@ import {
   date,
   unique,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 
 export const planEnum = pgEnum('plan', ['free', 'pro', 'enterprise'])
@@ -74,7 +75,7 @@ export const features = pgTable(
       .references(() => tenants.id),
     projectId: uuid('project_id')
       .notNull()
-      .references(() => projects.id),
+      .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
     status: text('status').notNull().default('backlog'),
@@ -102,7 +103,7 @@ export const teamMembers = pgTable(
       .references(() => tenants.id),
     projectId: uuid('project_id')
       .notNull()
-      .references(() => projects.id),
+      .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     email: text('email'),
     roleDescription: text('role_description'),
@@ -130,7 +131,7 @@ export const activities = pgTable(
       .references(() => features.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     startDate: timestamp('start_date'),
-    dependsOnId: uuid('depends_on_id'),
+    dependsOnId: uuid('depends_on_id').references((): AnyPgColumn => activities.id, { onDelete: 'set null' }),
     estimatedHours: numeric('estimated_hours', { precision: 5, scale: 1 }).notNull().default('0'),
     assignedMemberId: uuid('assigned_member_id').references(() => teamMembers.id, { onDelete: 'set null' }),
     estimatedEndDate: timestamp('estimated_end_date'),

@@ -12,6 +12,11 @@ import {
   type CalendarEventType,
 } from '@/lib/calendar-utils'
 import { createActivitySchema, updateActivitySchema } from '@/lib/validations/activity'
+import {
+  calculateCascadeImpact,
+  applyCascade,
+  type CascadeResult,
+} from '@/lib/cascade/recalculate'
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
 
@@ -167,44 +172,67 @@ export async function recalculateProjectActivities(
     eventsByCalendarId.set(e.calendarId, list)
   }
 
-  await Promise.all(
-    projectActivities
-      .filter((a) => a.startDate && parseFloat(a.estimatedHours ?? '0') > 0)
-      .map((activity) => {
-        const startYear = activity.startDate!.getFullYear()
-        const relevantCalIds = [startYear, startYear + 1]
-          .map((y) => calendarsByYear.get(y)?.id)
-          .filter(Boolean) as string[]
+  // Pre-compute all end dates before entering the transaction (pure calculation, no DB writes)
+  const activityUpdates = projectActivities
+    .filter((a) => a.startDate && parseFloat(a.estimatedHours ?? '0') > 0)
+    .map((activity) => {
+      const startYear = activity.startDate!.getFullYear()
+      const relevantCalIds = [startYear, startYear + 1]
+        .map((y) => calendarsByYear.get(y)?.id)
+        .filter(Boolean) as string[]
 
-        const relevantEvents = relevantCalIds.flatMap(
-          (id) => eventsByCalendarId.get(id) ?? [],
-        )
+      const relevantEvents = relevantCalIds.flatMap(
+        (id) => eventsByCalendarId.get(id) ?? [],
+      )
 
-        const primaryCal = calendarsByYear.get(startYear)
-        const workingDays = primaryCal?.workingDays ?? DEFAULT_WORKING_DAYS
+      const primaryCal = calendarsByYear.get(startYear)
+      const workingDays = primaryCal?.workingDays ?? DEFAULT_WORKING_DAYS
 
-        const ctx = buildCalendarContext(workingDays, relevantEvents, activity.assignedMemberId!)
-        const estimatedEndDate = calcEndDateWithCalendar(
-          activity.startDate!,
-          parseFloat(activity.estimatedHours ?? '0'),
-          parseFloat(activity.dailyCapacityHours),
-          ctx,
-        )
+      const ctx = buildCalendarContext(workingDays, relevantEvents, activity.assignedMemberId!)
+      const estimatedEndDate = calcEndDateWithCalendar(
+        activity.startDate!,
+        parseFloat(activity.estimatedHours ?? '0'),
+        parseFloat(activity.dailyCapacityHours),
+        ctx,
+      )
 
-        return db
-          .update(activities)
-          .set({ estimatedEndDate, updatedAt: new Date() })
-          .where(eq(activities.id, activity.id))
-      }),
-  )
+      return { id: activity.id, estimatedEndDate }
+    })
 
-  // Sync derived dates on all features of the project
   const projectFeatures = await db
     .select({ id: features.id })
     .from(features)
     .where(and(eq(features.projectId, projectId), eq(features.tenantId, tenantId)))
 
-  await Promise.all(projectFeatures.map((f) => syncFeatureDates(f.id, tenantId)))
+  await db.transaction(async (tx) => {
+    // Update all activity end dates atomically
+    await Promise.all(
+      activityUpdates.map(({ id, estimatedEndDate }) =>
+        tx.update(activities).set({ estimatedEndDate, updatedAt: new Date() }).where(eq(activities.id, id)),
+      ),
+    )
+
+    // Sync feature dates from the now-updated activities
+    await Promise.all(
+      projectFeatures.map(async (f) => {
+        const acts = await tx
+          .select({ startDate: activities.startDate, estimatedEndDate: activities.estimatedEndDate })
+          .from(activities)
+          .where(and(eq(activities.featureId, f.id), eq(activities.tenantId, tenantId)))
+
+        const startDates = acts.map((a) => a.startDate).filter((d): d is Date => d != null)
+        const endDates = acts.map((a) => a.estimatedEndDate).filter((d): d is Date => d != null)
+
+        const startDate = startDates.length > 0 ? startDates.reduce((min, d) => (d < min ? d : min)) : null
+        const estimatedEndDate = endDates.length > 0 ? endDates.reduce((max, d) => (d > max ? d : max)) : null
+
+        await tx
+          .update(features)
+          .set({ startDate, estimatedEndDate, updatedAt: new Date() })
+          .where(and(eq(features.id, f.id), eq(features.tenantId, tenantId)))
+      }),
+    )
+  })
 }
 
 export async function getActivities(featureId: string) {
@@ -271,7 +299,7 @@ export async function updateActivity(
     status?: string
     displayOrder?: number
   }
-) {
+): Promise<{ requiresConfirmation: false } | { requiresConfirmation: true; cascadeResult: CascadeResult }> {
   updateActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
 
@@ -289,6 +317,12 @@ export async function updateActivity(
     .limit(1)
 
   if (!activity) throw new Error('Atividade não encontrada')
+
+  const cascadeResult = await calculateCascadeImpact(id, data, tenantId)
+
+  if (cascadeResult.hasImpact) {
+    return { requiresConfirmation: true, cascadeResult }
+  }
 
   const effectiveStartDate = 'startDate' in data ? data.startDate : activity.startDate
   const effectiveEstimatedHours =
@@ -318,6 +352,43 @@ export async function updateActivity(
 
   await syncFeatureDates(activity.featureId, tenantId)
   revalidatePath(`/projects/${activity.projectId}/features`)
+  return { requiresConfirmation: false }
+}
+
+export async function confirmActivityUpdate(
+  activityId: string,
+  data: {
+    name?: string
+    startDate?: Date | null
+    dependsOnId?: string | null
+    estimatedHours?: number
+    assignedMemberId?: string | null
+    status?: string
+    displayOrder?: number
+  },
+): Promise<{ impactedCount: number }> {
+  updateActivitySchema.parse(data)
+  const tenantId = await getAuthenticatedTenantId()
+
+  const [activity] = await db
+    .select({
+      featureId: activities.featureId,
+      projectId: features.projectId,
+    })
+    .from(activities)
+    .innerJoin(features, eq(activities.featureId, features.id))
+    .where(and(eq(activities.id, activityId), eq(activities.tenantId, tenantId)))
+    .limit(1)
+
+  if (!activity) throw new Error('Atividade não encontrada')
+
+  // Always recalculate on the server — never trust the cascadeResult from the client
+  const cascadeResult = await calculateCascadeImpact(activityId, data, tenantId)
+
+  await applyCascade(activityId, data, cascadeResult, tenantId)
+  await syncFeatureDates(activity.featureId, tenantId)
+  revalidatePath(`/projects/${activity.projectId}/features`)
+  return { impactedCount: cascadeResult.impactedItems.length }
 }
 
 export async function deleteActivity(id: string) {

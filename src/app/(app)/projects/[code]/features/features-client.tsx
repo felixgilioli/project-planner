@@ -33,7 +33,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { createFeature, updateFeature, deleteFeature } from '@/app/actions/features'
-import { createActivity, updateActivity, deleteActivity } from '@/app/actions/activities'
+import { createActivity, updateActivity, deleteActivity, confirmActivityUpdate } from '@/app/actions/activities'
+import { CascadeImpactModal } from '@/components/features/cascade-impact-modal'
+import type { CascadeResult } from '@/lib/cascade/recalculate'
 import { createComment, deleteComment } from '@/app/actions/feature-comments'
 import { MemberAvatar } from '@/components/members/member-card'
 import type { Feature, Activity, TeamMember, FeatureComment } from '@/lib/db/schema'
@@ -727,6 +729,11 @@ function ActivityFormDialog({
   const [status, setStatus] = useState('backlog')
   const [isPending, setIsPending] = useState(false)
 
+  const [cascadeModalOpen, setCascadeModalOpen] = useState(false)
+  const [pendingCascadeResult, setPendingCascadeResult] = useState<CascadeResult | null>(null)
+  const [pendingData, setPendingData] = useState<Parameters<typeof confirmActivityUpdate>[1] | null>(null)
+  const [isConfirming, setIsConfirming] = useState(false)
+
   useEffect(() => {
     if (open) {
       setName(activity?.name ?? '')
@@ -745,15 +752,23 @@ function ActivityFormDialog({
     setIsPending(true)
     try {
       if (isEditing) {
-        await updateActivity(activity.id, {
+        const submitData = {
           name: name.trim(),
           startDate: startDate ? new Date(startDate) : null,
           dependsOnId: dependsOnId || null,
           estimatedHours: hours ? parseFloat(hours) : 0,
           assignedMemberId: assignedMemberId || null,
           status,
-        })
+        }
+        const result = await updateActivity(activity.id, submitData)
+        if (result.requiresConfirmation) {
+          setPendingData(submitData)
+          setPendingCascadeResult(result.cascadeResult)
+          setCascadeModalOpen(true)
+          return
+        }
         toast.success('Atividade atualizada.')
+        onOpenChange(false)
       } else {
         await createActivity(featureId, {
           name: name.trim(),
@@ -763,19 +778,48 @@ function ActivityFormDialog({
           assignedMemberId: assignedMemberId || null,
         })
         toast.success('Atividade criada.')
+        onOpenChange(false)
       }
-      onOpenChange(false)
-    } catch {
-      toast.error(isEditing ? 'Erro ao atualizar atividade.' : 'Erro ao criar atividade.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.toLowerCase().includes('circular')) {
+        toast.error('Dependência circular detectada. Verifique as dependências antes de continuar.')
+      } else {
+        toast.error(isEditing ? 'Erro ao atualizar atividade.' : 'Erro ao criar atividade.')
+      }
     } finally {
       setIsPending(false)
     }
+  }
+
+  async function handleCascadeConfirm() {
+    if (!pendingData || !activity) return
+    setIsConfirming(true)
+    try {
+      const { impactedCount } = await confirmActivityUpdate(activity.id, pendingData)
+      toast.success(`Atividade e ${impactedCount} ${impactedCount === 1 ? 'item atualizado' : 'itens atualizados'}.`)
+      setCascadeModalOpen(false)
+      onOpenChange(false)
+    } catch {
+      toast.error('Erro ao confirmar alterações em cascata.')
+    } finally {
+      setIsConfirming(false)
+      setPendingData(null)
+      setPendingCascadeResult(null)
+    }
+  }
+
+  function handleCascadeCancel() {
+    setCascadeModalOpen(false)
+    setPendingData(null)
+    setPendingCascadeResult(null)
   }
 
   // Exclude the activity being edited from the dependency options
   const dependencyOptions = existingActivities.filter((a) => a.id !== activity?.id)
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
@@ -879,6 +923,17 @@ function ActivityFormDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+    {pendingCascadeResult && (
+      <CascadeImpactModal
+        open={cascadeModalOpen}
+        onOpenChange={(open) => { if (!open) handleCascadeCancel() }}
+        cascadeResult={pendingCascadeResult}
+        onConfirm={handleCascadeConfirm}
+        isPending={isConfirming}
+      />
+    )}
+  </>
   )
 }
 
