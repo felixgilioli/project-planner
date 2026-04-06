@@ -29,6 +29,7 @@ export async function getDeploymentSettings(projectId: string) {
 export async function saveDeploymentSettings(
   projectId: string,
   blockedWeekdays: string[],
+  estimationUnit: string = 'hours',
 ) {
   const tenantId = await getAuthenticatedTenantId()
 
@@ -49,13 +50,14 @@ export async function saveDeploymentSettings(
   if (existing) {
     await db
       .update(deploymentSettings)
-      .set({ blockedWeekdays, updatedAt: new Date() })
+      .set({ blockedWeekdays, estimationUnit, updatedAt: new Date() })
       .where(eq(deploymentSettings.id, existing.id))
   } else {
     await db.insert(deploymentSettings).values({
       tenantId,
       projectId,
       blockedWeekdays,
+      estimationUnit,
     })
   }
 

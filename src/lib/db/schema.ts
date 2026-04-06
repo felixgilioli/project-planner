@@ -260,6 +260,7 @@ export const deploymentSettings = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' })
       .unique(),
     blockedWeekdays: text('blocked_weekdays').array().notNull().default(['saturday', 'sunday']),
+    estimationUnit: text('estimation_unit').notNull().default('hours'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
 import { getProjectByCode } from '@/app/actions/projects'
 import { getDeploymentSettings, saveDeploymentSettings } from '@/app/actions/deployment-settings'
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const { code } = useParams<{ code: string }>()
   const [projectId, setProjectId] = useState<string | null>(null)
   const [blockedWeekdays, setBlockedWeekdays] = useState<string[]>(['saturday', 'sunday'])
+  const [estimationUnit, setEstimationUnit] = useState<string>('hours')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, startSave] = useTransition()
 
@@ -36,6 +38,7 @@ export default function SettingsPage() {
         const settings = await getDeploymentSettings(project.id)
         if (settings) {
           setBlockedWeekdays(settings.blockedWeekdays)
+          setEstimationUnit(settings.estimationUnit)
         }
       } catch {
         toast.error('Erro ao carregar configurações.')
@@ -56,7 +59,7 @@ export default function SettingsPage() {
     if (!projectId) return
     startSave(async () => {
       try {
-        await saveDeploymentSettings(projectId, blockedWeekdays)
+        await saveDeploymentSettings(projectId, blockedWeekdays, estimationUnit)
         toast.success('Configurações salvas com sucesso.')
       } catch {
         toast.error('Erro ao salvar configurações.')
@@ -69,6 +72,36 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Configurações do Projeto</h1>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Estimativas</CardTitle>
+          <CardDescription>
+            Defina a unidade utilizada para estimar o esforço das atividades.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Carregando...</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="estimation-unit">Unidade de estimativa</Label>
+              <Select value={estimationUnit} onValueChange={setEstimationUnit}>
+                <SelectTrigger id="estimation-unit" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hours">Horas</SelectItem>
+                  <SelectItem value="points">Pontos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
