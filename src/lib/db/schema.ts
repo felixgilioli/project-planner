@@ -81,6 +81,8 @@ export const features = pgTable(
     priority: text('priority').notNull().default('medium'),
     displayOrder: integer('display_order').notNull().default(0),
     dependsOnId: uuid('depends_on_id'),
+    startDate: timestamp('start_date'),
+    estimatedEndDate: timestamp('estimated_end_date'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

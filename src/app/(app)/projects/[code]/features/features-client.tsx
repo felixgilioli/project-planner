@@ -218,13 +218,6 @@ function FeatureDetail({
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
   const activitiesById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities])
 
-  const featureEndDate = useMemo(() => {
-    const dates = activities
-      .map((a) => a.estimatedEndDate)
-      .filter((d): d is Date => d != null)
-    if (dates.length === 0) return null
-    return dates.reduce((max, d) => (d > max ? d : max))
-  }, [activities])
 
 
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
@@ -554,12 +547,20 @@ function FeatureDetail({
           )}
         </div>
 
-        {featureEndDate && (
-          <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-            <span>Entrega estimada: <span className="font-medium text-foreground">{formatUTCDateBR(featureEndDate)}</span></span>
-          </div>
-        )}
+        <div className="mt-3 flex flex-col gap-1">
+          {feature.startDate && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+              <span>Início: <span className="font-medium text-foreground">{formatUTCDateBR(feature.startDate)}</span></span>
+            </div>
+          )}
+          {feature.estimatedEndDate && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+              <span>Entrega estimada: <span className="font-medium text-foreground">{formatUTCDateBR(feature.estimatedEndDate)}</span></span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Activities section */}

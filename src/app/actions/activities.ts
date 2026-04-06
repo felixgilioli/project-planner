@@ -15,6 +15,24 @@ import { createActivitySchema, updateActivitySchema } from '@/lib/validations/ac
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
 
+async function syncFeatureDates(featureId: string, tenantId: string): Promise<void> {
+  const acts = await db
+    .select({ startDate: activities.startDate, estimatedEndDate: activities.estimatedEndDate })
+    .from(activities)
+    .where(and(eq(activities.featureId, featureId), eq(activities.tenantId, tenantId)))
+
+  const startDates = acts.map((a) => a.startDate).filter((d): d is Date => d != null)
+  const endDates = acts.map((a) => a.estimatedEndDate).filter((d): d is Date => d != null)
+
+  const startDate = startDates.length > 0 ? startDates.reduce((min, d) => (d < min ? d : min)) : null
+  const estimatedEndDate = endDates.length > 0 ? endDates.reduce((max, d) => (d > max ? d : max)) : null
+
+  await db
+    .update(features)
+    .set({ startDate, estimatedEndDate, updatedAt: new Date() })
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+}
+
 async function fetchCalendarEventsForProject(
   projectId: string,
   years: number[],
@@ -179,6 +197,14 @@ export async function recalculateProjectActivities(
           .where(eq(activities.id, activity.id))
       }),
   )
+
+  // Sync derived dates on all features of the project
+  const projectFeatures = await db
+    .select({ id: features.id })
+    .from(features)
+    .where(and(eq(features.projectId, projectId), eq(features.tenantId, tenantId)))
+
+  await Promise.all(projectFeatures.map((f) => syncFeatureDates(f.id, tenantId)))
 }
 
 export async function getActivities(featureId: string) {
@@ -230,6 +256,7 @@ export async function createActivity(
     estimatedEndDate,
   })
 
+  await syncFeatureDates(featureId, tenantId)
   revalidatePath(`/projects/${feature.projectId}/features`)
 }
 
@@ -289,6 +316,7 @@ export async function updateActivity(
     })
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
+  await syncFeatureDates(activity.featureId, tenantId)
   revalidatePath(`/projects/${activity.projectId}/features`)
 }
 
@@ -311,5 +339,6 @@ export async function deleteActivity(id: string) {
     .delete(activities)
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
+  await syncFeatureDates(activity.featureId, tenantId)
   revalidatePath(`/projects/${activity.projectId}/features`)
 }
