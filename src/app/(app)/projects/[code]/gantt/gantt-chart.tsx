@@ -40,10 +40,20 @@ export default function GanttChart({ tasks, viewMode, onViewComments }: GanttCha
       ctx.set_title(task.name as string)
 
       const isFeature = task._isFeature as boolean
+      const isDeployment = task._isDeployment as boolean
       const featureId = isFeature ? task.id : (task._featureId as string)
       const featureName = isFeature ? (task.name as string) : (task._featureName as string)
 
-      if (isFeature) {
+      if (isDeployment) {
+        const depDate = task._deploymentDate as string
+        const [y, m, d] = depDate.split('-')
+        const isManual = task._deploymentManual as boolean
+        ctx.set_subtitle('')
+        ctx.set_details(
+          `<b>Implantação:</b> ${d}/${m}/${y}` +
+          (isManual ? '<br/><i>+ definida manualmente</i>' : ''),
+        )
+      } else if (isFeature) {
         ctx.set_subtitle('')
         ctx.set_details('')
       } else {
@@ -57,7 +67,7 @@ export default function GanttChart({ tasks, viewMode, onViewComments }: GanttCha
         ctx.set_details(lines.join('<br/>'))
       }
 
-      if (featureId) {
+      if (featureId && !isDeployment) {
         ctx.add_action('💬 Ver atualizações', () => {
           onViewCommentsRef.current(featureId, featureName)
         })

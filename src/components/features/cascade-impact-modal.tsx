@@ -1,6 +1,7 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import React from 'react'
+import { Loader2, Rocket } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -11,13 +12,18 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { CascadeResult, ImpactedItem } from '@/lib/cascade/recalculate'
+import type { CascadeResult, ImpactedItem, DeploymentConflict } from '@/lib/cascade/recalculate'
+
+export type DeploymentResolutionChoice = {
+  featureId: string
+  keep: boolean
+}
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   cascadeResult: CascadeResult
-  onConfirm: () => Promise<void>
+  onConfirm: (deploymentResolutions: DeploymentResolutionChoice[]) => Promise<void>
   isPending: boolean
 }
 
@@ -51,10 +57,71 @@ function ImpactRow({ item }: { item: ImpactedItem }) {
   )
 }
 
+function DeploymentConflictRow({
+  conflict,
+  choice,
+  onChoose,
+}: {
+  conflict: DeploymentConflict
+  choice: boolean | undefined
+  onChoose: (keep: boolean) => void
+}) {
+  return (
+    <div className="py-2 border-b border-border/50 last:border-0">
+      <div className="flex items-start gap-2 mb-2">
+        <Rocket className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" />
+        <span className="text-sm font-medium">{conflict.featureName}</span>
+      </div>
+      <p className="text-xs text-muted-foreground mb-2 pl-5">
+        Data atual: <strong>{formatISODateBR(conflict.currentDeploymentDate)}</strong>
+        {' · '}
+        Sugerida: <strong>{formatISODateBR(conflict.suggestedDeploymentDate)}</strong>
+      </p>
+      <div className="flex gap-2 pl-5">
+        <Button
+          size="sm"
+          variant={choice === true ? 'default' : 'outline'}
+          className="h-7 text-xs"
+          onClick={() => onChoose(true)}
+        >
+          Manter {formatISODateBR(conflict.currentDeploymentDate)}
+        </Button>
+        <Button
+          size="sm"
+          variant={choice === false ? 'default' : 'outline'}
+          className="h-7 text-xs"
+          onClick={() => onChoose(false)}
+        >
+          Recalcular para {formatISODateBR(conflict.suggestedDeploymentDate)}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function CascadeImpactModal({ open, onOpenChange, cascadeResult, onConfirm, isPending }: Props) {
   const activityItems = cascadeResult.impactedItems.filter((i) => i.type === 'activity')
   const featureItems = cascadeResult.impactedItems.filter((i) => i.type === 'feature')
   const total = cascadeResult.impactedItems.length
+  const conflicts = cascadeResult.deploymentConflicts ?? []
+
+  const [resolutions, setResolutions] = React.useState<Record<string, boolean>>({})
+
+  // Reset when modal opens
+  React.useEffect(() => {
+    if (open) setResolutions({})
+  }, [open])
+
+  const allConflictsResolved =
+    conflicts.length === 0 || conflicts.every((c) => resolutions[c.featureId] !== undefined)
+
+  function handleConfirm() {
+    const deploymentResolutions: DeploymentResolutionChoice[] = conflicts.map((c) => ({
+      featureId: c.featureId,
+      keep: resolutions[c.featureId] ?? true,
+    }))
+    onConfirm(deploymentResolutions)
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -62,8 +129,9 @@ export function CascadeImpactModal({ open, onOpenChange, cascadeResult, onConfir
         <DialogHeader>
           <DialogTitle>Impacto em cascata</DialogTitle>
           <DialogDescription>
-            {total} {total === 1 ? 'item será afetado' : 'itens serão afetados'} por essa
-            alteração. Revise antes de confirmar.
+            {total > 0
+              ? `${total} ${total === 1 ? 'item será afetado' : 'itens serão afetados'} por essa alteração. Revise antes de confirmar.`
+              : 'Verifique as datas de implantação afetadas abaixo.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -92,6 +160,30 @@ export function CascadeImpactModal({ open, onOpenChange, cascadeResult, onConfir
               </div>
             </section>
           )}
+          {conflicts.length > 0 && (
+            <section>
+              <h4 className="text-sm font-semibold mb-1 text-foreground flex items-center gap-1.5">
+                <Rocket className="h-3.5 w-3.5 text-amber-500" />
+                Datas de implantação — decisão necessária ({conflicts.length})
+              </h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Estas features possuem datas de implantação definidas manualmente. Escolha o que
+                fazer para cada uma:
+              </p>
+              <div>
+                {conflicts.map((conflict) => (
+                  <DeploymentConflictRow
+                    key={conflict.featureId}
+                    conflict={conflict}
+                    choice={resolutions[conflict.featureId]}
+                    onChoose={(keep) =>
+                      setResolutions((prev) => ({ ...prev, [conflict.featureId]: keep }))
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <DialogFooter>
@@ -102,7 +194,7 @@ export function CascadeImpactModal({ open, onOpenChange, cascadeResult, onConfir
           >
             Cancelar
           </Button>
-          <Button onClick={onConfirm} disabled={isPending}>
+          <Button onClick={handleConfirm} disabled={isPending || !allConflictsResolved}>
             {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Confirmar alterações
           </Button>
@@ -111,3 +203,4 @@ export function CascadeImpactModal({ open, onOpenChange, cascadeResult, onConfir
     </Dialog>
   )
 }
+

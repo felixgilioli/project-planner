@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { List, Users, Calendar, BarChart2, ChevronLeft, Settings, Moon, Sun, LayoutDashboard, MessageCircle } from 'lucide-react'
+import { List, Users, Calendar, BarChart2, ChevronLeft, Settings, Moon, Sun, LayoutDashboard, MessageCircle, SlidersHorizontal, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,6 +41,8 @@ export function ProjectSidebar({ project, userName }: ProjectSidebarProps) {
     { href: `/projects/${project.code}/calendar`, icon: Calendar, label: 'Calendário' },
     { href: `/projects/${project.code}/gantt`, icon: BarChart2, label: 'Gantt' },
     { href: `/projects/${project.code}/daily`, icon: MessageCircle, label: 'Daily' },
+    { href: `/projects/${project.code}/reports`, icon: FileText, label: 'Relatórios' },
+    { href: `/projects/${project.code}/settings`, icon: SlidersHorizontal, label: 'Configurações' },
   ]
 
   return (

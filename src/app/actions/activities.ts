@@ -16,7 +16,9 @@ import {
   calculateCascadeImpact,
   applyCascade,
   type CascadeResult,
+  type DeploymentResolution,
 } from '@/lib/cascade/recalculate'
+import { calculateDeploymentDate } from '@/lib/deployment/calculator'
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
 
@@ -46,6 +48,52 @@ async function syncFeatureStatus(featureId: string, tenantId: string): Promise<v
       .set({ status: newStatus, updatedAt: new Date() })
       .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
   }
+}
+
+async function syncFeatureDeploymentDate(
+  featureId: string,
+  projectId: string,
+  tenantId: string,
+): Promise<void> {
+  const [feature] = await db
+    .select({
+      estimatedEndDate: features.estimatedEndDate,
+      deploymentDate: features.deploymentDate,
+      deploymentDateManual: features.deploymentDateManual,
+    })
+    .from(features)
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+    .limit(1)
+
+  if (!feature || !feature.estimatedEndDate) {
+    // No end date — clear deployment date if auto
+    if (!feature?.deploymentDateManual) {
+      await db
+        .update(features)
+        .set({ deploymentDate: null, updatedAt: new Date() })
+        .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+    }
+    return
+  }
+
+  const { estimatedEndDate, deploymentDate, deploymentDateManual } = feature
+
+  if (!deploymentDateManual) {
+    // Scenario 1: recalculate automatically
+    const newDate = await calculateDeploymentDate(estimatedEndDate, projectId)
+    await db
+      .update(features)
+      .set({ deploymentDate: newDate, updatedAt: new Date() })
+      .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+  } else if (deploymentDate && estimatedEndDate > deploymentDate) {
+    // Scenario 3: development passed deployment date — auto-recalculate, reset manual
+    const newDate = await calculateDeploymentDate(estimatedEndDate, projectId)
+    await db
+      .update(features)
+      .set({ deploymentDate: newDate, deploymentDateManual: false, updatedAt: new Date() })
+      .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+  }
+  // Scenario 2 (manual and valid): no change in this path
 }
 
 async function syncFeatureDates(featureId: string, tenantId: string): Promise<void> {
@@ -327,6 +375,7 @@ export async function createActivity(
   })
 
   await Promise.all([syncFeatureDates(featureId, tenantId), syncFeatureStatus(featureId, tenantId)])
+  await syncFeatureDeploymentDate(featureId, feature.projectId, tenantId)
   revalidatePath(`/projects/${feature.projectId}/features`)
 }
 
@@ -406,6 +455,7 @@ export async function updateActivity(
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
   await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
+  await syncFeatureDeploymentDate(activity.featureId, activity.projectId, tenantId)
   revalidatePath(`/projects/${activity.projectId}/features`)
   return { requiresConfirmation: false }
 }
@@ -422,6 +472,7 @@ export async function confirmActivityUpdate(
     progress?: number
     displayOrder?: number
   },
+  deploymentResolutions?: DeploymentResolution[],
 ): Promise<{ impactedCount: number }> {
   updateActivitySchema.parse(data)
   const tenantId = await getAuthenticatedTenantId()
@@ -445,7 +496,7 @@ export async function confirmActivityUpdate(
   // Always recalculate on the server — never trust the cascadeResult from the client
   const cascadeResult = await calculateCascadeImpact(activityId, data, tenantId)
 
-  await applyCascade(activityId, data, cascadeResult, tenantId)
+  await applyCascade(activityId, data, cascadeResult, tenantId, deploymentResolutions)
   await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
   revalidatePath(`/projects/${activity.projectId}/features`)
   return { impactedCount: cascadeResult.impactedItems.length }
@@ -471,5 +522,6 @@ export async function deleteActivity(id: string) {
     .where(and(eq(activities.id, id), eq(activities.tenantId, tenantId)))
 
   await Promise.all([syncFeatureDates(activity.featureId, tenantId), syncFeatureStatus(activity.featureId, tenantId)])
+  await syncFeatureDeploymentDate(activity.featureId, activity.projectId, tenantId)
   revalidatePath(`/projects/${activity.projectId}/features`)
 }

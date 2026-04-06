@@ -85,6 +85,8 @@ export const features = pgTable(
     dependsOnId: uuid('depends_on_id'),
     startDate: timestamp('start_date'),
     estimatedEndDate: timestamp('estimated_end_date'),
+    deploymentDate: timestamp('deployment_date'),
+    deploymentDateManual: boolean('deployment_date_manual').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -245,3 +247,27 @@ export const featureComments = pgTable(
 
 export type FeatureComment = typeof featureComments.$inferSelect
 export type NewFeatureComment = typeof featureComments.$inferInsert
+
+export const deploymentSettings = pgTable(
+  'deployment_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .unique(),
+    blockedWeekdays: text('blocked_weekdays').array().notNull().default(['saturday', 'sunday']),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('deployment_settings_tenant_idx').on(t.tenantId),
+    index('deployment_settings_project_idx').on(t.projectId),
+  ],
+)
+
+export type DeploymentSettings = typeof deploymentSettings.$inferSelect
+export type NewDeploymentSettings = typeof deploymentSettings.$inferInsert

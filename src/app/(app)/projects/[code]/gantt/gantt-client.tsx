@@ -49,44 +49,72 @@ function buildTasks(data: GanttData, selectedMemberIds: Set<string>): GanttTask[
       ? activities.filter((a) => a.assignedMemberId && selectedMemberIds.has(a.assignedMemberId))
       : activities
 
-    if (visibleActivities.length === 0) { colorIdx++; continue }
+    const hasVisibleActivities = visibleActivities.length > 0
+    const hasDeployment = feature.deploymentDate != null
+
+    if (!hasVisibleActivities && !hasDeployment) { colorIdx++; continue }
 
     const featureClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}`
     const activityClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}-light`
+    const deploymentClass = `bar-fc${colorIdx % FEATURE_COLOR_COUNT}-deployment`
     colorIdx++
 
-    // Feature bar always spans ALL activities (full duration), not just the filtered ones
-    const starts = activities.map((a) => new Date(a.startDate!).getTime())
-    const ends = activities.map((a) => new Date(a.estimatedEndDate!).getTime())
-    const minStart = new Date(Math.min(...starts))
-    const maxEnd = new Date(Math.max(...ends))
+    if (hasVisibleActivities) {
+      // Feature bar always spans ALL activities (full duration), not just the filtered ones
+      const starts = activities.map((a) => new Date(a.startDate!).getTime())
+      const ends = activities.map((a) => new Date(a.estimatedEndDate!).getTime())
+      const minStart = new Date(Math.min(...starts))
+      const maxEnd = new Date(Math.max(...ends))
 
-    result.push({
-      id: feature.id,
-      name: feature.name,
-      start: toDateStr(minStart),
-      end: toDateStr(maxEnd),
-      progress: progressFromStatus(feature.status),
-      dependencies: '',
-      custom_class: featureClass,
-      _isFeature: true,
-    })
-
-    for (const act of visibleActivities) {
       result.push({
-        id: act.id,
-        name: act.name,
-        start: toDateStr(new Date(act.startDate!)),
-        end: toDateStr(new Date(act.estimatedEndDate!)),
-        progress: progressFromStatus(act.status),
+        id: feature.id,
+        name: feature.name,
+        start: toDateStr(minStart),
+        end: toDateStr(maxEnd),
+        progress: progressFromStatus(feature.status),
         dependencies: '',
-        custom_class: activityClass,
-        _memberName: act.memberName ?? null,
-        _estimatedHours: Number(act.estimatedHours),
-        _status: act.status,
-        _isFeature: false,
+        custom_class: featureClass,
+        _isFeature: true,
         _featureId: feature.id,
         _featureName: feature.name,
+      })
+
+      for (const act of visibleActivities) {
+        result.push({
+          id: act.id,
+          name: act.name,
+          start: toDateStr(new Date(act.startDate!)),
+          end: toDateStr(new Date(act.estimatedEndDate!)),
+          progress: progressFromStatus(act.status),
+          dependencies: '',
+          custom_class: activityClass,
+          _memberName: act.memberName ?? null,
+          _estimatedHours: Number(act.estimatedHours),
+          _status: act.status,
+          _isFeature: false,
+          _featureId: feature.id,
+          _featureName: feature.name,
+        })
+      }
+    }
+
+    // Deployment milestone diamond
+    if (hasDeployment) {
+      const depDateStr = toDateStr(new Date(feature.deploymentDate!))
+      result.push({
+        id: `deployment-${feature.id}`,
+        name: `◆ ${feature.name}`,
+        start: depDateStr,
+        end: depDateStr,
+        progress: 0,
+        dependencies: '',
+        custom_class: deploymentClass,
+        _isFeature: false,
+        _isDeployment: true,
+        _featureId: feature.id,
+        _featureName: feature.name,
+        _deploymentDate: depDateStr,
+        _deploymentManual: feature.deploymentDateManual ?? false,
       })
     }
   }

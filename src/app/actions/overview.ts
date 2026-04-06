@@ -1,6 +1,6 @@
 'use server'
 
-import { eq, and, inArray, desc } from 'drizzle-orm'
+import { eq, and, inArray, desc, asc, isNotNull, lt } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { projects, features, activities, teamMembers, featureComments } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
@@ -146,6 +146,18 @@ export async function getOverviewData(projectId: string) {
     return { member, assignedHours, utilizationPercent }
   })
 
+  // Upcoming deployments: next 5 features with deploymentDate, sorted ascending
+  const now = new Date()
+  const upcomingDeployments = projectFeatures
+    .filter((f) => f.deploymentDate != null)
+    .sort((a, b) => a.deploymentDate!.getTime() - b.deploymentDate!.getTime())
+    .slice(0, 5)
+
+  // Awaiting deployment: features with status 'done' but no past deploymentDate
+  const awaitingDeploymentCount = projectFeatures.filter(
+    (f) => f.status === 'done' && (f.deploymentDate == null || f.deploymentDate > now),
+  ).length
+
   // Upcoming deliveries: features with estimatedEndDate, sorted ascending
   const upcomingDeliveries = projectFeatures
     .filter((f) => f.estimatedEndDate != null)
@@ -160,10 +172,11 @@ export async function getOverviewData(projectId: string) {
 
   return {
     project,
-    metrics: { totalFeatures, overallProgress, deliveryDate, openImpediments },
+    metrics: { totalFeatures, overallProgress, deliveryDate, openImpediments, awaitingDeploymentCount },
     featureProgress,
     teamOccupation,
     upcomingDeliveries,
+    upcomingDeployments,
     recentComments,
     blockedFeatures,
   }

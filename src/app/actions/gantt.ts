@@ -32,6 +32,8 @@ export async function getGanttData(projectId: string) {
       priority: features.priority,
       status: features.status,
       displayOrder: features.displayOrder,
+      deploymentDate: features.deploymentDate,
+      deploymentDateManual: features.deploymentDateManual,
     })
     .from(features)
     .where(and(eq(features.projectId, projectId), eq(features.tenantId, tenantId)))
@@ -72,7 +74,7 @@ export async function getGanttData(projectId: string) {
       feature: f,
       activities: activitiesByFeature.get(f.id) ?? [],
     }))
-    .filter((item) => item.activities.length > 0)
+    .filter((item) => item.activities.length > 0 || item.feature.deploymentDate != null)
 
   const memberRows = await db
     .select({

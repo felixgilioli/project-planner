@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Calendar, CheckCircle2, Layers } from 'lucide-react'
+import { Calendar, CheckCircle2, Layers, Rocket } from 'lucide-react'
 import { BlockedFeaturesCard } from './blocked-features-modal'
 import { getProjectByCode } from '@/app/actions/projects'
 import { getOverviewData } from '@/app/actions/overview'
@@ -63,7 +63,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
   const data = await getOverviewData(project.id)
   if (!data) redirect('/projects')
 
-  const { metrics, featureProgress, teamOccupation, upcomingDeliveries, recentComments, blockedFeatures } = data
+  const { metrics, featureProgress, teamOccupation, upcomingDeliveries, upcomingDeployments, recentComments, blockedFeatures } = data
 
   const today = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -81,7 +81,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -134,6 +134,19 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
         </Card>
 
         <BlockedFeaturesCard count={metrics.openImpediments} blockedFeatures={blockedFeatures} />
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Aguardando Implantação
+            </CardTitle>
+            <Rocket className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{metrics.awaitingDeploymentCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">concluídas sem implantação</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Middle row */}
@@ -216,6 +229,40 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming deployments */}
+      {upcomingDeployments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Rocket className="h-4 w-4" />
+              Próximas Implantações
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {upcomingDeployments.map((feature) => (
+                <li key={feature.id} className="flex items-center justify-between py-3 gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant={STATUS_VARIANT[feature.status] ?? 'secondary'}>
+                      {STATUS_LABEL[feature.status] ?? feature.status}
+                    </Badge>
+                    <span className="text-sm truncate">{feature.name}</span>
+                    {feature.deploymentDateManual && (
+                      <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-2 py-0.5 font-medium shrink-0">
+                        Manual
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatDate(feature.deploymentDate)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Bottom row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

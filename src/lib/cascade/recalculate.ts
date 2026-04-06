@@ -8,6 +8,7 @@ import {
   type CalendarEventData,
   type CalendarEventType,
 } from '@/lib/calendar-utils'
+import { calculateDeploymentDate } from '@/lib/deployment/calculator'
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
@@ -21,10 +22,26 @@ export type ImpactedItem = {
   newEndDate: string | null
 }
 
+export type DeploymentConflict = {
+  featureId: string
+  featureName: string
+  currentDeploymentDate: string // ISO 8601
+  suggestedDeploymentDate: string // ISO 8601
+}
+
+export type DeploymentAutoUpdate = {
+  featureId: string
+  newDeploymentDate: string // ISO 8601
+  setManualFalse: boolean
+  note?: string
+}
+
 export type CascadeResult = {
   impactedItems: ImpactedItem[]
   hasImpact: boolean
   editedActivityEndDate: Date | null
+  deploymentConflicts: DeploymentConflict[]
+  deploymentAutoUpdates: DeploymentAutoUpdate[]
 }
 
 export class CircularDependencyError extends Error {
@@ -283,7 +300,7 @@ export async function calculateCascadeImpact(
   const newEndIso = isoOrNull(newEndDate)
 
   if (oldEndIso === newEndIso) {
-    return { hasImpact: false, impactedItems: [], editedActivityEndDate: newEndDate }
+    return { hasImpact: false, impactedItems: [], editedActivityEndDate: newEndDate, deploymentConflicts: [], deploymentAutoUpdates: [] }
   }
 
   // Working overrides: tracks recomputed dates for activities
@@ -486,16 +503,87 @@ export async function calculateCascadeImpact(
     })
   }
 
-  return { hasImpact: impactedItems.length > 0, impactedItems, editedActivityEndDate: newEndDate }
+  // ── Step 6: Compute deployment date changes for affected features ──────
+  const deploymentConflicts: DeploymentConflict[] = []
+  const deploymentAutoUpdates: DeploymentAutoUpdate[] = []
+
+  if (featureOverrides.size > 0) {
+    // Fetch current deployment data for all affected features
+    const affectedFeatIds = [...featureOverrides.keys()]
+    const featureDeploymentRows = await db
+      .select({
+        id: features.id,
+        name: features.name,
+        deploymentDate: features.deploymentDate,
+        deploymentDateManual: features.deploymentDateManual,
+      })
+      .from(features)
+      .where(and(inArray(features.id, affectedFeatIds), eq(features.tenantId, tenantId)))
+
+    for (const row of featureDeploymentRows) {
+      const override = featureOverrides.get(row.id)
+      if (!override?.newEndDate) continue
+
+      const suggestedDate = await calculateDeploymentDate(override.newEndDate, projectId)
+      const suggestedIso = suggestedDate.toISOString()
+
+      if (!row.deploymentDateManual) {
+        // Scenario 1: auto-recalculate
+        deploymentAutoUpdates.push({
+          featureId: row.id,
+          newDeploymentDate: suggestedIso,
+          setManualFalse: false,
+        })
+      } else if (
+        row.deploymentDate &&
+        override.newEndDate > row.deploymentDate
+      ) {
+        // Scenario 3: development passed planned deployment — auto-recalculate, reset manual
+        deploymentAutoUpdates.push({
+          featureId: row.id,
+          newDeploymentDate: suggestedIso,
+          setManualFalse: true,
+          note: 'Data de implantação recalculada pois o desenvolvimento passou da data prevista.',
+        })
+      } else if (row.deploymentDate) {
+        // Scenario 2: manual date still valid — show conflict for user to decide
+        const currentIso = row.deploymentDate.toISOString()
+        if (currentIso !== suggestedIso) {
+          deploymentConflicts.push({
+            featureId: row.id,
+            featureName: row.name,
+            currentDeploymentDate: currentIso,
+            suggestedDeploymentDate: suggestedIso,
+          })
+        }
+      }
+    }
+  }
+
+  const hasImpact = impactedItems.length > 0 || deploymentAutoUpdates.length > 0 || deploymentConflicts.length > 0
+
+  return {
+    hasImpact,
+    impactedItems,
+    editedActivityEndDate: newEndDate,
+    deploymentConflicts,
+    deploymentAutoUpdates,
+  }
 }
 
 // ─── applyCascade ─────────────────────────────────────────────────────────────
+
+export type DeploymentResolution = {
+  featureId: string
+  keep: boolean // true = keep current date, false = use suggested date
+}
 
 export async function applyCascade(
   activityId: string,
   newData: UpdateActivityData,
   cascadeResult: CascadeResult,
   tenantId: string,
+  deploymentResolutions?: DeploymentResolution[],
 ): Promise<void> {
   // Use the end date already computed during calculateCascadeImpact — no re-fetch needed
   const estimatedEndDate = cascadeResult.editedActivityEndDate
@@ -538,6 +626,38 @@ export async function applyCascade(
           updatedAt: new Date(),
         })
         .where(and(eq(features.id, item.id), eq(features.tenantId, tenantId)))
+    }
+
+    // 4. Apply automatic deployment date updates (Scenario 1 & 3)
+    for (const update of cascadeResult.deploymentAutoUpdates) {
+      await tx
+        .update(features)
+        .set({
+          deploymentDate: new Date(update.newDeploymentDate),
+          deploymentDateManual: update.setManualFalse ? false : undefined,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(features.id, update.featureId), eq(features.tenantId, tenantId)))
+    }
+
+    // 5. Apply resolved deployment conflicts (Scenario 2)
+    if (deploymentResolutions && deploymentResolutions.length > 0) {
+      const resolutionMap = new Map(deploymentResolutions.map((r) => [r.featureId, r.keep]))
+
+      for (const conflict of cascadeResult.deploymentConflicts) {
+        const keep = resolutionMap.get(conflict.featureId)
+        if (keep === false) {
+          // User chose to recalculate
+          await tx
+            .update(features)
+            .set({
+              deploymentDate: new Date(conflict.suggestedDeploymentDate),
+              updatedAt: new Date(),
+            })
+            .where(and(eq(features.id, conflict.featureId), eq(features.tenantId, tenantId)))
+        }
+        // if keep === true or undefined: leave deployment date unchanged
+      }
     }
   })
 }

@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { features, projects, featureComments } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
 import { featureSchema, updateFeatureSchema, toggleBlockedSchema } from '@/lib/validations/feature'
+import { calculateDeploymentDate } from '@/lib/deployment/calculator'
 
 export async function getFeatures(projectId: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -102,6 +103,69 @@ export async function deleteFeature(id: string) {
   await db
     .delete(features)
     .where(and(eq(features.id, id), eq(features.tenantId, tenantId)))
+
+  revalidatePath(`/projects/${feature.projectId}/features`)
+}
+
+export async function updateDeploymentDate(
+  featureId: string,
+  date: Date,
+  manual: boolean,
+) {
+  const tenantId = await getAuthenticatedTenantId()
+
+  const [feature] = await db
+    .select({
+      projectId: features.projectId,
+      estimatedEndDate: features.estimatedEndDate,
+    })
+    .from(features)
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+    .limit(1)
+
+  if (!feature) throw new Error('Feature não encontrada')
+
+  if (feature.estimatedEndDate && date <= feature.estimatedEndDate) {
+    throw new Error(
+      'A data de implantação não pode ser anterior ou igual à data estimada de entrega.',
+    )
+  }
+
+  await db
+    .update(features)
+    .set({ deploymentDate: date, deploymentDateManual: manual, updatedAt: new Date() })
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+
+  revalidatePath(`/projects/${feature.projectId}/features`)
+}
+
+export async function recalculateDeploymentDate(featureId: string) {
+  const tenantId = await getAuthenticatedTenantId()
+
+  const [feature] = await db
+    .select({
+      projectId: features.projectId,
+      estimatedEndDate: features.estimatedEndDate,
+    })
+    .from(features)
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+    .limit(1)
+
+  if (!feature) throw new Error('Feature não encontrada')
+
+  if (!feature.estimatedEndDate) {
+    throw new Error('A feature não possui data estimada de entrega para calcular a implantação.')
+  }
+
+  const deploymentDate = await calculateDeploymentDate(
+    feature.estimatedEndDate,
+    feature.projectId,
+  )
+
+  await db
+    .update(features)
+    .set({ deploymentDate, deploymentDateManual: false, updatedAt: new Date() })
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
 
   revalidatePath(`/projects/${feature.projectId}/features`)
 }

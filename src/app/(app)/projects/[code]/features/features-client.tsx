@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown, CalendarDays, Lock, LockOpen } from 'lucide-react'
+import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown, CalendarDays, Lock, LockOpen, Rocket, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { createFeature, updateFeature, deleteFeature, toggleFeatureBlocked } from '@/app/actions/features'
+import { createFeature, updateFeature, deleteFeature, toggleFeatureBlocked, updateDeploymentDate, recalculateDeploymentDate } from '@/app/actions/features'
 import { createActivity, updateActivity, deleteActivity, confirmActivityUpdate } from '@/app/actions/activities'
 import { CascadeImpactModal } from '@/components/features/cascade-impact-modal'
 import type { CascadeResult } from '@/lib/cascade/recalculate'
@@ -309,6 +309,10 @@ function FeatureDetail({
   const [blockCommentContent, setBlockCommentContent] = useState('')
   const [isTogglingBlocked, setIsTogglingBlocked] = useState(false)
 
+  const [editingDeployment, setEditingDeployment] = useState(false)
+  const [isSavingDeployment, setIsSavingDeployment] = useState(false)
+  const [isRecalculatingDeployment, setIsRecalculatingDeployment] = useState(false)
+
   // Reset editing state when the selected feature changes
   useEffect(() => {
     setEditingName(false)
@@ -318,6 +322,7 @@ function FeatureDetail({
     setEditingActivity(null)
     setBlockDialogOpen(false)
     setBlockCommentContent('')
+    setEditingDeployment(false)
   }, [feature.id])
 
   async function handleSaveName() {
@@ -433,6 +438,32 @@ function FeatureDetail({
       toast.error('Erro ao remover atividade.')
     } finally {
       setDeletingActivityId(null)
+    }
+  }
+
+  async function handleSaveDeploymentDate(dateStr: string) {
+    setIsSavingDeployment(true)
+    setEditingDeployment(false)
+    try {
+      const date = new Date(dateStr + 'T12:00:00Z')
+      await updateDeploymentDate(feature.id, date, true)
+      toast.success('Data de implantação atualizada.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar data de implantação.')
+    } finally {
+      setIsSavingDeployment(false)
+    }
+  }
+
+  async function handleRecalculateDeployment() {
+    setIsRecalculatingDeployment(true)
+    try {
+      await recalculateDeploymentDate(feature.id)
+      toast.success('Data de implantação recalculada.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao recalcular data de implantação.')
+    } finally {
+      setIsRecalculatingDeployment(false)
     }
   }
 
@@ -642,7 +673,7 @@ function FeatureDetail({
             />
           </div>
           {(feature.startDate || feature.estimatedEndDate) && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap mb-3">
               {feature.startDate && (
                 <div className="flex items-center gap-1.5">
                   <CalendarDays className="h-3.5 w-3.5 shrink-0" />
@@ -660,6 +691,83 @@ function FeatureDetail({
               )}
             </div>
           )}
+
+          {/* Deployment date */}
+          <div className="border-t border-border/50 pt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Rocket className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs text-muted-foreground">Implantação:</span>
+              {editingDeployment ? (
+                <input
+                  type="date"
+                  autoFocus
+                  defaultValue={feature.deploymentDate ? feature.deploymentDate.toISOString().slice(0, 10) : ''}
+                  className="text-xs border rounded px-1.5 py-0.5 bg-background focus:outline-none focus:border-primary"
+                  onBlur={(e) => {
+                    if (e.target.value) handleSaveDeploymentDate(e.target.value)
+                    else setEditingDeployment(false)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setEditingDeployment(false)
+                    if (e.key === 'Enter') {
+                      const v = (e.target as HTMLInputElement).value
+                      if (v) handleSaveDeploymentDate(v)
+                      else setEditingDeployment(false)
+                    }
+                  }}
+                />
+              ) : isSavingDeployment ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : feature.deploymentDate ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingDeployment(true)}
+                  className="text-xs font-medium text-foreground hover:text-primary transition-colors"
+                  title="Clique para editar"
+                >
+                  {formatUTCDateBR(feature.deploymentDate)}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingDeployment(true)}
+                  className="text-xs text-muted-foreground/60 italic hover:text-muted-foreground transition-colors"
+                >
+                  Não definida — clique para definir
+                </button>
+              )}
+
+              {feature.deploymentDate && !editingDeployment && (
+                <>
+                  {feature.deploymentDateManual ? (
+                    <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-2 py-0.5 font-medium">
+                      Manual
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 rounded-full px-2 py-0.5">
+                      Calculada
+                    </span>
+                  )}
+                  {feature.estimatedEndDate && (
+                    <button
+                      type="button"
+                      onClick={handleRecalculateDeployment}
+                      disabled={isRecalculatingDeployment}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                      title="Recalcular automaticamente"
+                    >
+                      {isRecalculatingDeployment ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                      Recalcular
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -964,11 +1072,11 @@ function ActivityFormDialog({
     }
   }
 
-  async function handleCascadeConfirm() {
+  async function handleCascadeConfirm(deploymentResolutions: import('@/components/features/cascade-impact-modal').DeploymentResolutionChoice[]) {
     if (!pendingData || !activity) return
     setIsConfirming(true)
     try {
-      const { impactedCount } = await confirmActivityUpdate(activity.id, pendingData)
+      const { impactedCount } = await confirmActivityUpdate(activity.id, pendingData, deploymentResolutions)
       toast.success(`Atividade e ${impactedCount} ${impactedCount === 1 ? 'item atualizado' : 'itens atualizados'}.`)
       setCascadeModalOpen(false)
       onOpenChange(false)
