@@ -8,8 +8,11 @@ import { ThemeProvider } from '@/components/shared/theme-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'SquadPlanner',
-  description: 'Planejamento de squads para times ágeis',
+  title: 'Project Planner',
+  description: 'Planejamento de projetos para times ágeis',
+  icons: {
+    icon: 'https://cdn-icons-png.flaticon.com/512/1087/1087815.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
