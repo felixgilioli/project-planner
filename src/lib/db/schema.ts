@@ -81,6 +81,7 @@ export const features = pgTable(
     status: text('status').notNull().default('backlog'),
     priority: text('priority').notNull().default('medium'),
     displayOrder: integer('display_order').notNull().default(0),
+    isBlocked: boolean('is_blocked').notNull().default(false),
     dependsOnId: uuid('depends_on_id'),
     startDate: timestamp('start_date'),
     estimatedEndDate: timestamp('estimated_end_date'),

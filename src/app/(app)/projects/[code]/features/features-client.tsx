@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown, CalendarDays } from 'lucide-react'
+import { Plus, Trash2, X, Check, Loader2, Pencil, ChevronDown, CalendarDays, Lock, LockOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { createFeature, updateFeature, deleteFeature } from '@/app/actions/features'
+import { createFeature, updateFeature, deleteFeature, toggleFeatureBlocked } from '@/app/actions/features'
 import { createActivity, updateActivity, deleteActivity, confirmActivityUpdate } from '@/app/actions/activities'
 import { CascadeImpactModal } from '@/components/features/cascade-impact-modal'
 import type { CascadeResult } from '@/lib/cascade/recalculate'
@@ -186,6 +186,12 @@ const FeatureListItem = memo(function FeatureListItem({
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge className={cn('text-xs', pCfg.className)}>{pCfg.label}</Badge>
         <Badge className={cn('text-xs', sCfg.className)}>{sCfg.label}</Badge>
+        {feature.isBlocked && (
+          <Badge className="text-xs bg-red-100 text-red-800 border-0 gap-1">
+            <Lock className="h-2.5 w-2.5" />
+            Bloqueada
+          </Badge>
+        )}
       </div>
       <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
         <div className="h-full bg-indigo-500 rounded-full" style={{ width: '0%' }} />
@@ -239,6 +245,10 @@ function FeatureDetail({
   const [isDeleting, setIsDeleting] = useState(false)
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null)
 
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
+  const [blockCommentContent, setBlockCommentContent] = useState('')
+  const [isTogglingBlocked, setIsTogglingBlocked] = useState(false)
+
   // Reset editing state when the selected feature changes
   useEffect(() => {
     setEditingName(false)
@@ -246,6 +256,8 @@ function FeatureDetail({
     setEditingField(null)
     setActivityModalOpen(false)
     setEditingActivity(null)
+    setBlockDialogOpen(false)
+    setBlockCommentContent('')
   }, [feature.id])
 
   async function handleSaveName() {
@@ -320,6 +332,21 @@ function FeatureDetail({
       toast.error('Erro ao atualizar dependência.')
     } finally {
       setIsUpdatingDependsOn(false)
+    }
+  }
+
+  async function handleToggleBlocked() {
+    if (!blockCommentContent.trim()) return
+    setIsTogglingBlocked(true)
+    try {
+      await toggleFeatureBlocked(feature.id, !feature.isBlocked, blockCommentContent)
+      toast.success(feature.isBlocked ? 'Bloqueio removido.' : 'Feature marcada como bloqueada.')
+      setBlockDialogOpen(false)
+      setBlockCommentContent('')
+    } catch {
+      toast.error('Erro ao atualizar status de bloqueio.')
+    } finally {
+      setIsTogglingBlocked(false)
     }
   }
 
@@ -494,6 +521,27 @@ function FeatureDetail({
               )}
             </Badge>
           )}
+
+          <button
+            type="button"
+            onClick={() => setBlockDialogOpen(true)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer border-0',
+              feature.isBlocked
+                ? 'bg-red-100 text-red-800'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            )}
+            title={feature.isBlocked ? 'Clique para desbloquear' : 'Clique para bloquear'}
+          >
+            {isTogglingBlocked ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : feature.isBlocked ? (
+              <Lock className="h-3 w-3" />
+            ) : (
+              <LockOpen className="h-3 w-3" />
+            )}
+            {feature.isBlocked ? 'Bloqueada' : 'Bloquear'}
+          </button>
         </div>
 
         {/* Description */}
@@ -685,6 +733,61 @@ function FeatureDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Block/unblock dialog */}
+      <Dialog open={blockDialogOpen} onOpenChange={(open) => {
+        setBlockDialogOpen(open)
+        if (!open) setBlockCommentContent('')
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {feature.isBlocked ? 'Desbloquear feature' : 'Bloquear feature'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              {feature.isBlocked
+                ? 'Descreva como o impedimento foi resolvido.'
+                : 'Descreva o motivo do bloqueio.'}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="block-comment">Comentário *</Label>
+              <textarea
+                id="block-comment"
+                value={blockCommentContent}
+                onChange={(e) => setBlockCommentContent(e.target.value)}
+                placeholder={feature.isBlocked
+                  ? 'Ex: Impedimento resolvido após reunião com stakeholders…'
+                  : 'Ex: Aguardando definição do design…'}
+                maxLength={1000}
+                className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] resize-none"
+                autoFocus
+              />
+              <span className="text-xs text-muted-foreground">{blockCommentContent.length}/1000</span>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setBlockDialogOpen(false); setBlockCommentContent('') }}
+                disabled={isTogglingBlocked}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={handleToggleBlocked}
+                disabled={isTogglingBlocked || !blockCommentContent.trim()}
+                className={!feature.isBlocked ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+              >
+                {isTogglingBlocked && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {feature.isBlocked ? 'Desbloquear' : 'Bloquear'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

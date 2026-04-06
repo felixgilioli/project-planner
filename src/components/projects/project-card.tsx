@@ -71,7 +71,7 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
     <>
       <Card
         className="group relative overflow-hidden cursor-pointer transition-shadow hover:shadow-md"
-        onClick={() => router.push(`/projects/${project.code}/features`)}
+        onClick={() => router.push(`/projects/${project.code}/overview`)}
       >
         {/* Color strip */}
         <div className="h-2 w-full" style={{ backgroundColor: project.color }} />

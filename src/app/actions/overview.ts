@@ -37,7 +37,9 @@ export async function getOverviewData(projectId: string) {
 
   const featureIds = projectFeatures.map((f) => f.id)
 
-  const [projectActivities, recentCommentsRaw, openImpedimentsRaw] = await Promise.all([
+  const blockedFeatureIds = projectFeatures.filter((f) => f.isBlocked).map((f) => f.id)
+
+  const [projectActivities, recentCommentsRaw, blockedImpedimentCommentsRaw] = await Promise.all([
     featureIds.length > 0
       ? db
           .select()
@@ -63,17 +65,23 @@ export async function getOverviewData(projectId: string) {
           .orderBy(desc(featureComments.createdAt))
           .limit(5)
       : Promise.resolve([]),
-    featureIds.length > 0
+    blockedFeatureIds.length > 0
       ? db
-          .select({ id: featureComments.id })
+          .select({
+            id: featureComments.id,
+            featureId: featureComments.featureId,
+            content: featureComments.content,
+            createdAt: featureComments.createdAt,
+          })
           .from(featureComments)
           .where(
             and(
               eq(featureComments.tenantId, tenantId),
-              inArray(featureComments.featureId, featureIds),
+              inArray(featureComments.featureId, blockedFeatureIds),
               eq(featureComments.type, 'impediment'),
             ),
           )
+          .orderBy(desc(featureComments.createdAt))
       : Promise.resolve([]),
   ])
 
@@ -89,7 +97,21 @@ export async function getOverviewData(projectId: string) {
     .filter((d): d is Date => d != null)
     .reduce<Date | null>((max, d) => (!max || d > max ? d : max), null)
 
-  const openImpediments = openImpedimentsRaw.length
+  const openImpediments = blockedFeatureIds.length
+
+  // Blocked features with their most recent impediment comment
+  const lastImpedimentByFeature = new Map<string, { content: string; createdAt: Date }>()
+  for (const c of blockedImpedimentCommentsRaw) {
+    if (!lastImpedimentByFeature.has(c.featureId)) {
+      lastImpedimentByFeature.set(c.featureId, { content: c.content, createdAt: c.createdAt })
+    }
+  }
+  const blockedFeatures = projectFeatures
+    .filter((f) => f.isBlocked)
+    .map((f) => ({
+      feature: f,
+      lastImpediment: lastImpedimentByFeature.get(f.id) ?? null,
+    }))
 
   // Feature progress
   const featureProgress = projectFeatures.map((feature) => {
@@ -134,5 +156,6 @@ export async function getOverviewData(projectId: string) {
     teamOccupation,
     upcomingDeliveries,
     recentComments,
+    blockedFeatures,
   }
 }

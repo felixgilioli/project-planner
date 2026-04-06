@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { AlertTriangle, Calendar, CheckCircle2, Layers } from 'lucide-react'
+import { Calendar, CheckCircle2, Layers } from 'lucide-react'
+import { BlockedFeaturesCard } from './blocked-features-modal'
 import { getProjectByCode } from '@/app/actions/projects'
 import { getOverviewData } from '@/app/actions/overview'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,7 +58,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
   const data = await getOverviewData(project.id)
   if (!data) redirect('/projects')
 
-  const { metrics, featureProgress, teamOccupation, upcomingDeliveries, recentComments } = data
+  const { metrics, featureProgress, teamOccupation, upcomingDeliveries, recentComments, blockedFeatures } = data
 
   const today = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -123,25 +124,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Impedimentos
-            </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p
-              className={`text-3xl font-bold ${
-                metrics.openImpediments > 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-green-600 dark:text-green-400'
-              }`}
-            >
-              {metrics.openImpediments}
-            </p>
-          </CardContent>
-        </Card>
+        <BlockedFeaturesCard count={metrics.openImpediments} blockedFeatures={blockedFeatures} />
       </div>
 
       {/* Middle row */}

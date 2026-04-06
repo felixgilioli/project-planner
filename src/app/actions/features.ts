@@ -3,9 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { eq, and, asc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { features, projects } from '@/lib/db/schema'
+import { features, projects, featureComments } from '@/lib/db/schema'
 import { getAuthenticatedTenantId } from '@/lib/auth'
-import { featureSchema, updateFeatureSchema } from '@/lib/validations/feature'
+import { featureSchema, updateFeatureSchema, toggleBlockedSchema } from '@/lib/validations/feature'
 
 export async function getFeatures(projectId: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -102,6 +102,38 @@ export async function deleteFeature(id: string) {
   await db
     .delete(features)
     .where(and(eq(features.id, id), eq(features.tenantId, tenantId)))
+
+  revalidatePath(`/projects/${feature.projectId}/features`)
+}
+
+export async function toggleFeatureBlocked(
+  featureId: string,
+  isBlocked: boolean,
+  commentContent: string,
+) {
+  toggleBlockedSchema.parse({ isBlocked, commentContent })
+
+  const tenantId = await getAuthenticatedTenantId()
+
+  const [feature] = await db
+    .select({ projectId: features.projectId })
+    .from(features)
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+    .limit(1)
+
+  if (!feature) throw new Error('Feature não encontrada')
+
+  await db
+    .update(features)
+    .set({ isBlocked, updatedAt: new Date() })
+    .where(and(eq(features.id, featureId), eq(features.tenantId, tenantId)))
+
+  await db.insert(featureComments).values({
+    tenantId,
+    featureId,
+    content: commentContent.trim(),
+    type: isBlocked ? 'impediment' : 'update',
+  })
 
   revalidatePath(`/projects/${feature.projectId}/features`)
 }
