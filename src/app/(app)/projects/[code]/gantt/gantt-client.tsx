@@ -1,15 +1,24 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Loader2 } from 'lucide-react'
 import type { GanttTask } from 'frappe-gantt'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AllocationTable } from '@/components/gantt/allocation-table'
 import { MemberAvatar } from '@/components/members/member-card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 import { getGanttData, type GanttData } from '@/app/actions/gantt'
+import { getComments } from '@/app/actions/feature-comments'
+import type { FeatureComment } from '@/lib/db/schema'
 
 const GanttChart = dynamic(() => import('./gantt-chart'), {
   ssr: false,
@@ -76,6 +85,8 @@ function buildTasks(data: GanttData, selectedMemberIds: Set<string>): GanttTask[
         _estimatedHours: Number(act.estimatedHours),
         _status: act.status,
         _isFeature: false,
+        _featureId: feature.id,
+        _featureName: feature.name,
       })
     }
   }
@@ -99,6 +110,7 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
   const [generatedTime, setGeneratedTime] = useState(generatedAt)
   const [isRefreshing, startRefresh] = useTransition()
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
+  const [commentsFeature, setCommentsFeature] = useState<{ id: string; name: string } | null>(null)
 
   const members = useMemo(
     () => data.memberAllocations.map((a) => a.member),
@@ -194,7 +206,13 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
         <>
           {/* Gantt — 60% */}
           <div className="flex-[3] min-h-0 overflow-hidden">
-            <GanttChart tasks={tasks} viewMode={viewMode} />
+            <GanttChart
+              tasks={tasks}
+              viewMode={viewMode}
+              onViewComments={(featureId, featureName) =>
+                setCommentsFeature({ id: featureId, name: featureName })
+              }
+            />
           </div>
 
           {/* Allocation table — 40% */}
@@ -206,6 +224,103 @@ export function GanttClient({ projectId, initialData, generatedAt }: GanttClient
           </div>
         </>
       )}
+
+      <CommentsDialog
+        feature={commentsFeature}
+        onClose={() => setCommentsFeature(null)}
+      />
     </div>
+  )
+}
+
+// ─── Comments dialog ──────────────────────────────────────────────────────────
+
+const COMMENT_TYPE_CONFIG = {
+  update: { label: 'Atualização', dot: 'bg-blue-500', text: 'text-blue-600' },
+  impediment: { label: 'Impedimento', dot: 'bg-red-500', text: 'text-red-600' },
+  requirement_change: { label: 'Mudança de requisito', dot: 'bg-amber-400', text: 'text-amber-600' },
+} as const
+
+function commentTypeConfig(type: string) {
+  return COMMENT_TYPE_CONFIG[type as keyof typeof COMMENT_TYPE_CONFIG] ?? COMMENT_TYPE_CONFIG.update
+}
+
+function formatCommentDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const now = new Date()
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (isToday) return `hoje às ${time}`
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')
+  return `${day} ${month} às ${time}`
+}
+
+function CommentsDialog({
+  feature,
+  onClose,
+}: {
+  feature: { id: string; name: string } | null
+  onClose: () => void
+}) {
+  const [comments, setComments] = useState<FeatureComment[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!feature) {
+      setComments([])
+      return
+    }
+    setIsLoading(true)
+    setComments([])
+    getComments(feature.id)
+      .then(setComments)
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feature?.id])
+
+  return (
+    <Dialog open={!!feature} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-base">{feature?.name}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : comments.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic py-4">
+              Nenhum registro ainda.
+            </p>
+          ) : (
+            <div className="relative">
+              <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
+              <div className="space-y-4 pl-8">
+                {comments.map((comment) => {
+                  const cfg = commentTypeConfig(comment.type)
+                  return (
+                    <div key={comment.id} className="relative">
+                      <div className={cn('absolute -left-6 top-1 w-3 h-3 rounded-full border-2 border-background', cfg.dot)} />
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={cn('text-xs font-medium', cfg.text)}>{cfg.label}</span>
+                        <span className="text-xs text-muted-foreground">{formatCommentDate(comment.createdAt)}</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap break-words">{comment.content}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
