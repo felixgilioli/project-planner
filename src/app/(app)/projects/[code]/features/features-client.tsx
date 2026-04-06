@@ -56,11 +56,21 @@ const STATUS_CONFIG = {
   blocked: { label: 'Bloqueada', className: 'bg-red-100 text-red-800 border-0 dark:bg-red-900/30 dark:text-red-300' },
 } as const
 
+const ACTIVITY_STATUS_BORDER = {
+  backlog: 'border-l-gray-400 dark:border-l-gray-600',
+  in_progress: 'border-l-blue-500',
+  done: 'border-l-emerald-500',
+  blocked: 'border-l-red-500',
+} as const
+
 function priorityConfig(p: string) {
   return PRIORITY_CONFIG[p as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium
 }
 function statusConfig(s: string) {
   return STATUS_CONFIG[s as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.backlog
+}
+function activityBorderColor(s: string) {
+  return ACTIVITY_STATUS_BORDER[s as keyof typeof ACTIVITY_STATUS_BORDER] ?? ACTIVITY_STATUS_BORDER.backlog
 }
 
 // ─── Main export ─────────────────────────────────────────────────────────────
@@ -70,6 +80,7 @@ type ActivityProgressEntry = { featureId: string; progress: number; estimatedHou
 interface FeaturesClientProps {
   projectId: string
   projectCode: string
+  projectName: string
   features: Feature[]
   selectedFeatureId?: string
   activities: Activity[]
@@ -81,6 +92,7 @@ interface FeaturesClientProps {
 export function FeaturesClient({
   projectId,
   projectCode,
+  projectName,
   features,
   selectedFeatureId,
   activities,
@@ -160,6 +172,7 @@ export function FeaturesClient({
             activities={activities}
             projectId={projectId}
             projectCode={projectCode}
+            projectName={projectName}
             members={members}
             comments={comments}
             allFeatures={features}
@@ -241,6 +254,7 @@ function FeatureDetail({
   activities,
   projectId,
   projectCode,
+  projectName,
   members,
   comments,
   allFeatures,
@@ -249,6 +263,7 @@ function FeatureDetail({
   activities: Activity[]
   projectId: string
   projectCode: string
+  projectName: string
   members: TeamMember[]
   comments: FeatureComment[]
   allFeatures: Feature[]
@@ -259,6 +274,17 @@ function FeatureDetail({
   // Pre-compute lookup maps to avoid O(n) find() inside render loops
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
   const activitiesById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities])
+
+  const overallProgress = useMemo(() => {
+    if (activities.length === 0) return 0
+    let totalWeight = 0, weightedSum = 0
+    for (const a of activities) {
+      const w = parseFloat(a.estimatedHours ?? '0') || 1
+      weightedSum += (a.progress ?? 0) * w
+      totalWeight += w
+    }
+    return Math.round(weightedSum / totalWeight)
+  }, [activities])
 
 
 
@@ -415,171 +441,155 @@ function FeatureDetail({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-6 border-b">
-        {/* Name row */}
-        <div className="flex items-start gap-2 mb-3">
-          {editingName ? (
-            <div className="flex items-center gap-2 flex-1">
-              <input
-                ref={nameInputRef}
-                defaultValue={feature.name}
-                className="flex-1 text-xl font-semibold bg-transparent border-b border-border focus:outline-none focus:border-primary"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveName()
-                  if (e.key === 'Escape') setEditingName(false)
-                }}
-              />
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0"
-                onClick={handleSaveName}
-                disabled={isSavingName}
-              >
-                {isSavingName ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Check className="h-3 w-3" />
-                )}
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0"
-                onClick={() => setEditingName(false)}
-                disabled={isSavingName}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ) : (
-            <h2
-              className="text-xl font-semibold flex-1 cursor-pointer hover:text-primary transition-colors"
-              onClick={() => setEditingName(true)}
-              title="Clique para editar"
-            >
-              {feature.name}
-            </h2>
-          )}
-
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="p-6 border-b shrink-0">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+          <span>{projectName}</span>
+          <span>·</span>
+          <span>Features</span>
         </div>
 
-        {/* Status & Priority */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {editingField === 'status' ? (
-            <select
-              autoFocus
-              defaultValue={feature.status}
-              className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none"
-              onChange={(e) => handleUpdateStatus(e.target.value)}
-              onBlur={() => setEditingField(null)}
-            >
-              {Object.entries(STATUS_CONFIG).map(([value, cfg]) => (
-                <option key={value} value={value}>{cfg.label}</option>
-              ))}
-            </select>
-          ) : (
-            <Badge
-              className={cn('cursor-pointer', sCfg.className)}
-              onClick={() => setEditingField('status')}
-              title="Clique para editar"
-            >
-              {isUpdatingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : sCfg.label}
-            </Badge>
-          )}
+        {/* Title row + badges on right */}
+        <div className="flex items-start gap-3 mb-3">
+          {/* Editable name */}
+          <div className="flex-1 min-w-0">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={nameInputRef}
+                  defaultValue={feature.name}
+                  className="flex-1 text-xl font-semibold bg-transparent border-b border-border focus:outline-none focus:border-primary"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName()
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={handleSaveName} disabled={isSavingName}>
+                  {isSavingName ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingName(false)} disabled={isSavingName}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <h2
+                className="text-xl font-semibold cursor-pointer hover:text-primary transition-colors"
+                onClick={() => setEditingName(true)}
+                title="Clique para editar"
+              >
+                {feature.name}
+              </h2>
+            )}
+          </div>
 
-          {editingField === 'priority' ? (
-            <select
-              autoFocus
-              defaultValue={feature.priority}
-              className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none"
-              onChange={(e) => handleUpdatePriority(e.target.value)}
-              onBlur={() => setEditingField(null)}
-            >
-              {Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => (
-                <option key={value} value={value}>{cfg.label}</option>
-              ))}
-            </select>
-          ) : (
-            <Badge
-              className={cn('cursor-pointer', pCfg.className)}
-              onClick={() => setEditingField('priority')}
-              title="Clique para editar"
-            >
-              {isUpdatingPriority ? <Loader2 className="h-3 w-3 animate-spin" /> : pCfg.label}
-            </Badge>
-          )}
+          {/* Badges + actions on right */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {editingField === 'status' ? (
+              <select
+                autoFocus
+                defaultValue={feature.status}
+                className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none"
+                onChange={(e) => handleUpdateStatus(e.target.value)}
+                onBlur={() => setEditingField(null)}
+              >
+                {Object.entries(STATUS_CONFIG).map(([value, cfg]) => (
+                  <option key={value} value={value}>{cfg.label}</option>
+                ))}
+              </select>
+            ) : (
+              <Badge className={cn('cursor-pointer', sCfg.className)} onClick={() => setEditingField('status')} title="Clique para editar">
+                {isUpdatingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : sCfg.label}
+              </Badge>
+            )}
 
-          {editingField === 'dependsOn' ? (
-            <select
-              autoFocus
-              defaultValue={feature.dependsOnId ?? ''}
-              className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none max-w-[200px]"
-              onChange={(e) => handleUpdateDependsOn(e.target.value || null)}
-              onBlur={() => setEditingField(null)}
-            >
-              <option value="">Sem dependência</option>
-              {allFeatures
-                .filter((f) => f.id !== feature.id)
-                .map((f) => (
+            {editingField === 'priority' ? (
+              <select
+                autoFocus
+                defaultValue={feature.priority}
+                className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none"
+                onChange={(e) => handleUpdatePriority(e.target.value)}
+                onBlur={() => setEditingField(null)}
+              >
+                {Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => (
+                  <option key={value} value={value}>{cfg.label}</option>
+                ))}
+              </select>
+            ) : (
+              <Badge className={cn('cursor-pointer', pCfg.className)} onClick={() => setEditingField('priority')} title="Clique para editar">
+                {isUpdatingPriority ? <Loader2 className="h-3 w-3 animate-spin" /> : pCfg.label}
+              </Badge>
+            )}
+
+            {editingField === 'dependsOn' ? (
+              <select
+                autoFocus
+                defaultValue={feature.dependsOnId ?? ''}
+                className="text-xs border rounded-full px-2.5 py-0.5 bg-background focus:outline-none max-w-[200px]"
+                onChange={(e) => handleUpdateDependsOn(e.target.value || null)}
+                onBlur={() => setEditingField(null)}
+              >
+                <option value="">Sem dependência</option>
+                {allFeatures.filter((f) => f.id !== feature.id).map((f) => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
-            </select>
-          ) : (
-            <Badge
-              className={cn(
-                'cursor-pointer border-0 max-w-[200px] truncate',
-                feature.dependsOnId
-                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300'
-                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-              )}
-              onClick={() => setEditingField('dependsOn')}
-              title={feature.dependsOnId ? `Depende de: ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? ''}` : 'Clique para definir dependência'}
-            >
-              {isUpdatingDependsOn ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : feature.dependsOnId ? (
-                `↳ ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? '…'}`
-              ) : (
-                'Sem dependência'
-              )}
-            </Badge>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setBlockDialogOpen(true)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer border-0',
-              feature.isBlocked
-                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-            )}
-            title={feature.isBlocked ? 'Clique para desbloquear' : 'Clique para bloquear'}
-          >
-            {isTogglingBlocked ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : feature.isBlocked ? (
-              <Lock className="h-3 w-3" />
+              </select>
             ) : (
-              <LockOpen className="h-3 w-3" />
+              <Badge
+                className={cn(
+                  'cursor-pointer border-0 max-w-[200px] truncate',
+                  feature.dependsOnId
+                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                )}
+                onClick={() => setEditingField('dependsOn')}
+                title={feature.dependsOnId ? `Depende de: ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? ''}` : 'Clique para definir dependência'}
+              >
+                {isUpdatingDependsOn ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : feature.dependsOnId ? (
+                  `↳ ${allFeatures.find((f) => f.id === feature.dependsOnId)?.name ?? '…'}`
+                ) : (
+                  'Sem dependência'
+                )}
+              </Badge>
             )}
-            {feature.isBlocked ? 'Bloqueada' : 'Bloquear'}
-          </button>
+
+            <button
+              type="button"
+              onClick={() => setBlockDialogOpen(true)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer border-0',
+                feature.isBlocked
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
+              )}
+              title={feature.isBlocked ? 'Clique para desbloquear' : 'Clique para bloquear'}
+            >
+              {isTogglingBlocked ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : feature.isBlocked ? (
+                <Lock className="h-3 w-3" />
+              ) : (
+                <LockOpen className="h-3 w-3" />
+              )}
+              {feature.isBlocked ? 'Bloqueada' : 'Bloquear'}
+            </button>
+
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Description */}
-        <div className="mt-3">
+        <div className="mb-4">
           {editingDescription ? (
             <div className="flex flex-col gap-1.5">
               <textarea
@@ -593,23 +603,11 @@ function FeatureDetail({
                 }}
               />
               <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
-                  onClick={handleSaveDescription}
-                  disabled={isSavingDescription}
-                >
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={handleSaveDescription} disabled={isSavingDescription}>
                   {isSavingDescription ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                   Salvar
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => setEditingDescription(false)}
-                  disabled={isSavingDescription}
-                >
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditingDescription(false)} disabled={isSavingDescription}>
                   <X className="h-3 w-3" />
                   Cancelar
                 </Button>
@@ -631,132 +629,155 @@ function FeatureDetail({
           )}
         </div>
 
-        <div className="mt-3 flex flex-col gap-1">
-          {feature.startDate && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-              <span>Início: <span className="font-medium text-foreground">{formatUTCDateBR(feature.startDate)}</span></span>
-            </div>
-          )}
-          {feature.estimatedEndDate && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-              <span>Entrega estimada: <span className="font-medium text-foreground">{formatUTCDateBR(feature.estimatedEndDate)}</span></span>
+        {/* Summary block: progress + dates */}
+        <div className="bg-secondary/50 rounded-lg px-4 py-3 border">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-muted-foreground">Progresso geral</span>
+            <span className="text-xs font-medium tabular-nums">{overallProgress}%</span>
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
+            <div
+              className={cn('h-full rounded-full transition-all', overallProgress === 100 ? 'bg-emerald-500' : 'bg-indigo-500')}
+              style={{ width: `${overallProgress}%` }}
+            />
+          </div>
+          {(feature.startDate || feature.estimatedEndDate) && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+              {feature.startDate && (
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                  <span>Início: <span className="font-medium text-foreground">{formatUTCDateBR(feature.startDate)}</span></span>
+                </div>
+              )}
+              {feature.startDate && feature.estimatedEndDate && (
+                <div className="w-px h-3 bg-border shrink-0" />
+              )}
+              {feature.estimatedEndDate && (
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                  <span>Entrega: <span className="font-medium text-foreground">{formatUTCDateBR(feature.estimatedEndDate)}</span></span>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Activities section */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <h3 className="font-semibold mb-4">Atividades</h3>
+      {/* ── Body: activities + updates sidebar ─────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Activities */}
+        <div className="flex-1 overflow-y-auto p-6 min-w-0">
+          <h3 className="font-semibold mb-4">Atividades</h3>
 
-        {activities.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-4">Nenhuma atividade ainda.</p>
-        )}
+          {activities.length === 0 && (
+            <p className="text-sm text-muted-foreground mb-4">Nenhuma atividade ainda.</p>
+          )}
 
-        {activities.length > 0 && (
-          <div className="space-y-1 mb-4">
-            {activities.map((activity) => {
-              const asCfg = statusConfig(activity.status)
-              const isRemovingThis = deletingActivityId === activity.id
-              const dependsOn = activity.dependsOnId ? activitiesById.get(activity.dependsOnId) : null
-              const assignedMember = activity.assignedMemberId ? membersById.get(activity.assignedMemberId) : null
+          {activities.length > 0 && (
+            <div className="flex flex-col gap-2 mb-4">
+              {activities.map((activity) => {
+                const asCfg = statusConfig(activity.status)
+                const isRemovingThis = deletingActivityId === activity.id
+                const assignedMember = activity.assignedMemberId ? membersById.get(activity.assignedMemberId) : null
+                const borderColor = activityBorderColor(activity.status)
 
-              return (
-                <div
-                  key={activity.id}
-                  className="flex items-center gap-3 p-2 rounded-md hover:bg-muted group"
-                >
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm truncate block">{activity.name}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={cn('h-full rounded-full transition-all', activity.progress === 100 ? 'bg-green-500' : 'bg-indigo-500')}
-                          style={{ width: `${activity.progress ?? 0}%` }}
-                        />
+                return (
+                  <div
+                    key={activity.id}
+                    className={cn('rounded-md border border-l-4 bg-background p-3 group flex flex-col gap-2', borderColor)}
+                  >
+                    {/* Info row: name + status badge */}
+                    <div className="flex items-start gap-2 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate block">{activity.name}</span>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all', activity.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500')}
+                              style={{ width: `${activity.progress ?? 0}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{activity.progress ?? 0}%</span>
+                        </div>
                       </div>
-                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">{activity.progress ?? 0}%</span>
+                      <Badge className={cn('text-xs shrink-0', asCfg.className)}>{asCfg.label}</Badge>
+                    </div>
+
+                    {/* Meta row: assignee + dates + hours + actions */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                        {assignedMember && (
+                          <span title={assignedMember.name} className="shrink-0">
+                            <MemberAvatar name={assignedMember.name} size="sm" />
+                          </span>
+                        )}
+                        {activity.startDate && (
+                          <span className="truncate">
+                            {formatUTCDateBR(activity.startDate)}
+                            {activity.estimatedEndDate && <> → {formatUTCDateBR(activity.estimatedEndDate)}</>}
+                          </span>
+                        )}
+                        {parseFloat(activity.estimatedHours ?? '0') > 0 && (
+                          <span className="shrink-0 tabular-nums">{parseFloat(activity.estimatedHours ?? '0')}h</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={() => { setEditingActivity(activity); setActivityModalOpen(true) }}
+                          disabled={isRemovingThis}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={() => handleDeleteActivity(activity.id)}
+                          disabled={isRemovingThis}
+                        >
+                          {isRemovingThis ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  {dependsOn && (
-                    <span className="text-xs text-muted-foreground shrink-0" title={`Depende de: ${dependsOn.name}`}>
-                      ↳ {dependsOn.name}
-                    </span>
-                  )}
-                  {activity.startDate && (
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {formatUTCDateBR(activity.startDate)}
-                      {activity.estimatedEndDate && (
-                        <> → {formatUTCDateBR(activity.estimatedEndDate)}</>
-                      )}
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
-                    {parseFloat(activity.estimatedHours ?? '0')}h
-                  </span>
-                  {assignedMember && (
-                    <span title={assignedMember.name} className="shrink-0">
-                      <MemberAvatar name={assignedMember.name} size="sm" />
-                    </span>
-                  )}
-                  <Badge className={cn('text-xs shrink-0', asCfg.className)}>{asCfg.label}</Badge>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
-                    onClick={() => { setEditingActivity(activity); setActivityModalOpen(true) }}
-                    disabled={isRemovingThis}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
-                    onClick={() => handleDeleteActivity(activity.id)}
-                    disabled={isRemovingThis}
-                  >
-                    {isRemovingThis ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <X className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => { setEditingActivity(null); setActivityModalOpen(true) }}
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar atividade
+          </Button>
+
+          <ActivityFormDialog
+            open={activityModalOpen}
+            onOpenChange={(open) => { setActivityModalOpen(open); if (!open) setEditingActivity(null) }}
+            featureId={feature.id}
+            existingActivities={activities}
+            members={members}
+            activity={editingActivity}
+          />
+        </div>
+
+        {/* Updates sidebar */}
+        <div className="w-80 shrink-0 border-l flex flex-col bg-secondary/30">
+          <div className="px-4 py-3 border-b shrink-0">
+            <h3 className="text-sm font-semibold">Atualizações</h3>
           </div>
-        )}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-2 text-muted-foreground hover:text-foreground"
-          onClick={() => { setEditingActivity(null); setActivityModalOpen(true) }}
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar atividade
-        </Button>
-
-        <ActivityFormDialog
-          open={activityModalOpen}
-          onOpenChange={(open) => { setActivityModalOpen(open); if (!open) setEditingActivity(null) }}
-          featureId={feature.id}
-          existingActivities={activities}
-          members={members}
-          activity={editingActivity}
-        />
-
-        {/* Updates section */}
-        <div className="mt-8 border-t pt-6">
-          <h3 className="font-semibold mb-4">Atualizações</h3>
           <DiarySection featureId={feature.id} comments={comments} />
         </div>
       </div>
 
-      {/* Delete feature dialog */}
+      {/* ── Delete feature dialog ───────────────────────────────────────────── */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -779,7 +800,7 @@ function FeatureDetail({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Block/unblock dialog */}
+      {/* ── Block/unblock dialog ────────────────────────────────────────────── */}
       <Dialog open={blockDialogOpen} onOpenChange={(open) => {
         setBlockDialogOpen(open)
         if (!open) setBlockCommentContent('')
@@ -1178,106 +1199,83 @@ function DiarySection({
   }
 
   return (
-    <div>
-      {/* New comment form */}
-      <form onSubmit={handleSubmit} className="space-y-2 mb-6">
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 text-sm font-normal"
-              >
-                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', commentTypeConfig(type).dot)} />
-                {commentTypeConfig(type).label}
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-0.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {Object.entries(COMMENT_TYPE_CONFIG).map(([value, cfg]) => (
-                <DropdownMenuItem
-                  key={value}
-                  onSelect={() => setType(value)}
-                  className="gap-2"
-                >
-                  <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', cfg.dot)} />
-                  {cfg.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Descreva a atualização, impedimento ou mudança…"
-          maxLength={1000}
-          className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] resize-none"
-        />
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{content.length}/1000</span>
-          <Button type="submit" size="sm" disabled={isPending || !content.trim()}>
-            {isPending && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
-            Registrar
-          </Button>
-        </div>
-      </form>
+    <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+      {/* Form fixed at top */}
+      <div className="p-4 border-b shrink-0">
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-8 gap-2 text-xs font-normal">
+                  <span className={cn('w-2 h-2 rounded-full shrink-0', commentTypeConfig(type).dot)} />
+                  {commentTypeConfig(type).label}
+                  <ChevronDown className="h-3 w-3 text-muted-foreground ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {Object.entries(COMMENT_TYPE_CONFIG).map(([value, cfg]) => (
+                  <DropdownMenuItem key={value} onSelect={() => setType(value)} className="gap-2">
+                    <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', cfg.dot)} />
+                    {cfg.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Descreva a atualização, impedimento ou mudança…"
+            maxLength={1000}
+            className="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-h-[72px] resize-none"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{content.length}/1000</span>
+            <Button type="submit" size="sm" disabled={isPending || !content.trim()}>
+              {isPending && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+              Registrar
+            </Button>
+          </div>
+        </form>
+      </div>
 
-      {/* Timeline */}
-      {comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">
-          Nenhum registro ainda. Use este diário para anotar atualizações e impedimentos.
-        </p>
-      ) : (
-        <div className="relative">
-          {/* Vertical line */}
-          <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
-
-          <div className="space-y-4 pl-8">
-            {comments.map((comment) => {
+      {/* Scrollable feed */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {comments.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">
+            Nenhum registro ainda. Use este espaço para anotar atualizações e impedimentos.
+          </p>
+        ) : (
+          <div className="space-y-0">
+            {comments.map((comment, idx) => {
               const cfg = commentTypeConfig(comment.type)
               const isDeleting = deletingId === comment.id
               return (
-                <div key={comment.id} className="relative group">
-                  {/* Dot */}
-                  <div
-                    className={cn(
-                      'absolute -left-6 top-1 w-3 h-3 rounded-full border-2 border-background',
-                      cfg.dot,
-                    )}
-                  />
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className={cn('text-xs font-medium', cfg.text)}>{cfg.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatCommentDate(comment.createdAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap break-words">{comment.content}</p>
+                <div key={comment.id}>
+                  <div className="group py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn('w-2 h-2 rounded-full shrink-0', cfg.dot)} />
+                      <span className={cn('text-xs font-medium', cfg.text)}>{cfg.label}</span>
+                      <span className="text-xs text-muted-foreground flex-1">{formatCommentDate(comment.createdAt)}</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
+                        onClick={() => handleDelete(comment.id)}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
                     </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
-                      onClick={() => handleDelete(comment.id)}
-                      disabled={isDeleting}
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3 w-3" />
-                      )}
-                    </Button>
+                    <p className="text-sm whitespace-pre-wrap break-words pl-4">{comment.content}</p>
                   </div>
+                  {idx < comments.length - 1 && <div className="border-b" />}
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

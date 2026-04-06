@@ -30,6 +30,7 @@ export default async function FeaturesPage({ params, searchParams }: FeaturesPag
     <FeaturesClient
       projectId={project.id}
       projectCode={project.code}
+      projectName={project.name}
       features={features}
       selectedFeatureId={selectedFeatureId}
       activities={activities}
