@@ -6,6 +6,80 @@ import { projects, features, activities, teamMembers, featureComments } from '@/
 import { getAuthenticatedTenantId } from '@/lib/auth'
 
 const OCCUPATION_REFERENCE_DAYS = 20 // 4-week window for utilization calc
+const FREE_WINDOW_LOOK_AHEAD_DAYS = 30 // horizon for gap detection
+
+type FreeWindowResult =
+  | { type: 'no_dates' }
+  | { type: 'gap'; from: Date; workingDays: number }
+  | { type: 'occupied' }
+
+function countWorkingDays(start: Date, end: Date): number {
+  let count = 0
+  const d = new Date(start)
+  d.setHours(0, 0, 0, 0)
+  const e = new Date(end)
+  e.setHours(0, 0, 0, 0)
+  while (d < e) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
+
+function findNextFreeWindow(
+  activities: { assignedMemberId: string | null; status: string; startDate: Date | null; estimatedEndDate: Date | null }[],
+  memberId: string,
+): FreeWindowResult {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const windowEnd = new Date(today)
+  windowEnd.setDate(windowEnd.getDate() + FREE_WINDOW_LOOK_AHEAD_DAYS)
+
+  const ranges = activities
+    .filter(
+      (a) =>
+        a.assignedMemberId === memberId &&
+        a.status !== 'done' &&
+        a.startDate != null &&
+        a.estimatedEndDate != null &&
+        a.estimatedEndDate > today,
+    )
+    .map((a) => ({ start: new Date(a.startDate!), end: new Date(a.estimatedEndDate!) }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  if (ranges.length === 0) return { type: 'no_dates' }
+
+  // Merge overlapping/adjacent ranges
+  const merged: { start: Date; end: Date }[] = []
+  for (const r of ranges) {
+    const last = merged[merged.length - 1]
+    if (!last || r.start > last.end) {
+      merged.push({ start: new Date(r.start), end: new Date(r.end) })
+    } else if (r.end > last.end) {
+      last.end = new Date(r.end)
+    }
+  }
+
+  let cursor = new Date(today)
+
+  for (const range of merged) {
+    if (range.end <= cursor) continue
+    if (range.start > cursor) {
+      const workingDays = countWorkingDays(cursor, range.start)
+      if (workingDays > 0) return { type: 'gap', from: new Date(cursor), workingDays }
+    }
+    if (range.end > cursor) cursor = new Date(range.end)
+  }
+
+  // After all ranges — check if there's free time before window end
+  if (cursor < windowEnd) {
+    const workingDays = countWorkingDays(cursor, windowEnd)
+    if (workingDays > 0) return { type: 'gap', from: new Date(cursor), workingDays }
+  }
+
+  return { type: 'occupied' }
+}
 
 export async function getOverviewData(projectId: string) {
   const tenantId = await getAuthenticatedTenantId()
@@ -143,7 +217,8 @@ export async function getOverviewData(projectId: string) {
     const referenceHours = parseFloat(member.dailyCapacityHours) * OCCUPATION_REFERENCE_DAYS
     const utilizationPercent =
       referenceHours > 0 ? Math.round((assignedHours / referenceHours) * 100) : 0
-    return { member, assignedHours, utilizationPercent }
+    const nextFreeWindow = findNextFreeWindow(projectActivities, member.id)
+    return { member, assignedHours, utilizationPercent, nextFreeWindow }
   })
 
   // Upcoming deployments: next 5 features with deploymentDate, sorted ascending

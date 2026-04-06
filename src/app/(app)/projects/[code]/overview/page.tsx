@@ -201,29 +201,40 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
               />
             ) : (
               <ul className="space-y-4">
-                {teamOccupation.map(({ member, assignedHours, utilizationPercent }) => (
-                  <li key={member.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium truncate max-w-[60%]">{member.name}</span>
-                      <span
-                        className={`text-xs font-medium shrink-0 ml-2 ${utilizationTextColor(utilizationPercent)}`}
-                      >
-                        {assignedHours.toFixed(1)}h — {utilizationPercent}%
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${utilizationColor(utilizationPercent)}`}
-                        style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                      />
-                    </div>
-                    {utilizationPercent > 100 && (
-                      <p className="text-xs text-red-500 mt-1">
-                        Sobrecarga: {utilizationPercent - 100}% acima da capacidade
-                      </p>
-                    )}
-                  </li>
-                ))}
+                {teamOccupation.map(({ member, assignedHours, utilizationPercent, nextFreeWindow }) => {
+                  const isToday = nextFreeWindow.type === 'gap' &&
+                    nextFreeWindow.from.toDateString() === new Date().toDateString()
+                  return (
+                    <li key={member.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium truncate max-w-[60%]">{member.name}</span>
+                        <span
+                          className={`text-xs font-medium shrink-0 ml-2 ${utilizationTextColor(utilizationPercent)}`}
+                        >
+                          {assignedHours.toFixed(1)}h — {utilizationPercent}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${utilizationColor(utilizationPercent)}`}
+                          style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
+                        />
+                      </div>
+                      {utilizationPercent > 100 && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Sobrecarga: {utilizationPercent - 100}% acima da capacidade
+                        </p>
+                      )}
+                      {nextFreeWindow.type === 'gap' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {isToday
+                            ? `Livre agora · ${nextFreeWindow.workingDays} dias úteis disponíveis`
+                            : `Livre a partir de ${formatDate(nextFreeWindow.from)} · ${nextFreeWindow.workingDays} dias úteis`}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </CardContent>
