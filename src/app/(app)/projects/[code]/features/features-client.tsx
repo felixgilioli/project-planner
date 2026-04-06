@@ -875,6 +875,7 @@ function ActivityFormDialog({
   const [hours, setHours] = useState('')
   const [assignedMemberId, setAssignedMemberId] = useState('')
   const [status, setStatus] = useState('backlog')
+  const [progress, setProgress] = useState(0)
   const [isPending, setIsPending] = useState(false)
 
   const [cascadeModalOpen, setCascadeModalOpen] = useState(false)
@@ -890,6 +891,7 @@ function ActivityFormDialog({
       setHours(activity?.estimatedHours ? String(parseFloat(activity.estimatedHours)) : '')
       setAssignedMemberId(activity?.assignedMemberId ?? '')
       setStatus(activity?.status ?? 'backlog')
+      setProgress(activity?.progress ?? 0)
     }
   }, [open, activity])
 
@@ -907,6 +909,7 @@ function ActivityFormDialog({
           estimatedHours: hours ? parseFloat(hours) : 0,
           assignedMemberId: assignedMemberId || null,
           status,
+          progress,
         }
         const result = await updateActivity(activity.id, submitData)
         if (result.requiresConfirmation) {
@@ -998,6 +1001,28 @@ function ActivityFormDialog({
                   <option key={value} value={value}>{cfg.label}</option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {isEditing && (
+            <div className="space-y-2">
+              <Label>Progresso</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={progress}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    setProgress(val)
+                    setStatus(val === 0 ? 'backlog' : val === 100 ? 'done' : 'in_progress')
+                  }}
+                  className="flex-1 h-2 accent-indigo-500"
+                />
+                <span className="text-sm font-medium tabular-nums w-10 text-right">{progress}%</span>
+              </div>
             </div>
           )}
 
